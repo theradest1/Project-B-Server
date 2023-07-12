@@ -8,6 +8,9 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <sstream>
+#include <ctime>
+
 
 //using namespace std;
 
@@ -26,12 +29,12 @@ const int maxMessageID = 0;
 const int checksBeforeDisconnect = 3;
 const int serverVersion = -1;
 
-std::list<std::string> playerTransformInfo{};
-std::list<std::string> playerInfo{};
-std::list<int> currentPlauerIDs{};
-std::list<int> playerDisconnectTimers{};
-std::list<std::string> eventsToSend{};
-std::list<int> uMessageID{};
+std::vector<std::string> playerTransformInfo{};
+std::vector<std::string> playerInfo{};
+std::vector<int> currentPlayerIDs{};
+std::vector<int> playerDisconnectTimers{};
+std::vector<std::string> eventsToSend{};
+std::vector<int> uMessageIDs{};
 
 SOCKET server_socket;
 WSADATA wsa;
@@ -55,6 +58,7 @@ std::vector<std::string> splitString(const std::string& input, char delimiter) {
 
 	return result;
 }
+
 void sendMessage(std::string message, sockaddr_in client)
 {
 	if (sendto(server_socket, message.c_str(), strlen(message.c_str()), 0, (sockaddr*)&client, sizeof(sockaddr_in)) == SOCKET_ERROR)
@@ -63,6 +67,22 @@ void sendMessage(std::string message, sockaddr_in client)
 	}
 }
 
+std::string getCurrentDateTimeAsString() {
+	// Get the current time
+	std::time_t now = std::time(nullptr);
+
+	// Convert the current time to a string
+	std::string dateTime = std::ctime(&now);
+
+	// Remove the newline character at the end
+	dateTime.erase(dateTime.length() - 1);
+
+	return dateTime;
+}
+
+int getPlayerIndex(int playerID) {
+	return currentPlayerIDs.indexOf(parseInt(info.split("~")[1]));
+}
 
 //Client options -------------------------------
 void updateTransform(std::string message, sockaddr_in client) //to do
@@ -74,11 +94,33 @@ void updateEvent(std::string message, sockaddr_in client) //to do
 void newEvent(std::string message, sockaddr_in client) //to do
 {
 }
-void newClient(std::string message, sockaddr_in client) //to do
+void newClient(std::string message, sockaddr_in client)
 {
+	sendMessage(std::to_string(currentID) + "~" + std::to_string(transformTPS) + "~" + std::to_string(eventTPS) + "~" + std::to_string(maxMessageID), client);
+	std::vector<std::string> splitInfo = splitString(message, '~');
+	addEventToAll("newClient~" + std::to_string(currentID) + '~' + splitInfo[1]);
+
+	//debug it
+	std::cout << "---------------------\nDate/Time: " << getCurrentDateTimeAsString() << "\nNew client: ID = " << currentID << ", Username: " << splitInfo[1] << std::endl;
+
+	std::string allPlayerJoinInfo = "";
+	for (int playerIndex : currentPlayerIDs) {
+		allPlayerJoinInfo += "newClient~" + currentPlayerIDs[playerIndex] + '~' + playerInfo[playerIndex] + " | ";
+	}
+	eventsToSend.push_back(allPlayerJoinInfo);
+	playerInfo.push_back(splitInfo[1]);
+	playerTransformInfo.push_back("(0, 0, 0)~(0, 0, 0, 1)");
+	playerDisconnectTimers.push_back(0);
+	currentPlayerIDs.push_back(currentID);
+	uMessageIDs.push_back(0);
+
+	currentID++;
 }
 void leave(std::string message, sockaddr_in client) //to do
 {
+	getPlayerIndex(splitString(message, '~'));
+	disconnectClient(currentPlayerIDs.indexOf(parseInt(info.split("~")[1])));
+	std::cout << "Player with ID " << playerID << " has left the game" << std::endl;
 }
 
 void ping(std::string message, sockaddr_in client)
@@ -94,7 +136,7 @@ void checkDisconnectTimers() //to do
 void disconnectClient() //to do
 {
 }
-void addEventToAll() //to do
+void addEventToAll(std::string message) //to do
 {
 }
 
