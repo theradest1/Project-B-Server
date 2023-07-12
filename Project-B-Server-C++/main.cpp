@@ -39,7 +39,7 @@ sockaddr_in server;
 
 std::map<std::string, std::function<void(std::string, sockaddr_in)>> functionMap; //a map of all functions available to the clients
 
-//UTILL -------------------
+//UTILL -------------------------------
 std::vector<std::string> splitString(const std::string& input, char delimiter) {
 	std::vector<std::string> result;
 	size_t start = 0;
@@ -57,23 +57,20 @@ std::vector<std::string> splitString(const std::string& input, char delimiter) {
 }
 void sendMessage(std::string message, sockaddr_in client)
 {
-	const char* data = "test message";
-	if (sendto(server_socket, data, strlen(data), 0, (sockaddr*)&client, sizeof(sockaddr_in)) == SOCKET_ERROR)
+	if (sendto(server_socket, message.c_str(), strlen(message.c_str()), 0, (sockaddr*)&client, sizeof(sockaddr_in)) == SOCKET_ERROR)
 	{
 		printf("sendto() failed with error code: %d", WSAGetLastError());
 	}
 }
 
+
+//Client options -------------------------------
 void updateTransform(std::string message, sockaddr_in client)
 {
-	//debug
-	std::cout << "Message: " << message << "IP: " << "Port: " << std::endl;
 }
 
 void ping(std::string message, sockaddr_in client)
 {
-	//debug
-	std::cout << "Message: " << message << "IP: " << "Port: " << std::endl;
 	sendMessage(std::to_string(serverVersion), client);
 }
 
@@ -114,6 +111,7 @@ void initializeServer()
 
 void processMessage(std::string message, sockaddr_in client)
 {
+	std::cout << "Message: " << message << ", IP: " << inet_ntoa(client.sin_addr) << ", Port: " << ntohs(client.sin_port) << std::endl;
 	std::string functionName = splitString(message, '~')[0];
 	if (functionMap.find(functionName) != functionMap.end()) {
 		functionMap[functionName](message, client);
