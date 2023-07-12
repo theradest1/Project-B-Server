@@ -1,2 +1,4 @@
 ﻿  main.cpp
-  Project-B-Server-C++.vcxproj -> C:\Users\lando\source\repos\Project-B-Server-C++\x64\Debug\Project-B-Server-C++.exe
+C:\Users\lando\Desktop\Repositories\Project-B-Server-2\Project-B-Server-C++\main.cpp(62,9): warning C4129: 'B': unrecognized character escape sequence
+C:\Users\lando\Desktop\Repositories\Project-B-Server-2\Project-B-Server-C++\main.cpp(100,44): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+  Project-B-Server-C++.vcxproj -> C:\Users\lando\Desktop\Repositories\Project-B-Server-2\x64\Debug\Project-B-Server-C++.exe
