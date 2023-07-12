@@ -5,6 +5,9 @@
 #include <winsock2.h>
 #include <list>
 #include <vector>
+#include <functional>
+#include <map>
+#include <string>
 
 using namespace std;
 
@@ -13,7 +16,6 @@ using namespace std;
 
 #define SERVER_PORT 6969
 #define BUFFER_LEN 1024
-const list<string> validCommands{"tu", "eu", "e", "newClient", "leave", "ping"};
 
 int currentID = 0;
 int currentUMessageID = 0;
@@ -33,7 +35,20 @@ list<int> uMessageID{};
 
 SOCKET server_socket;
 WSADATA wsa;
-sockaddr_in server, client;
+sockaddr_in server;
+
+std::map<std::string, std::function<void(string, sockaddr_in)>> functionMap; //a map of all functions available to the clients
+
+void bindFunctions() 
+{
+	functionMap["tu"] = [](string message, sockaddr_in client) { updateTransform(message, client); };
+}
+
+void updateTransform(string message, sockaddr_in client)
+{
+	//debug
+	printf("Message: %s, IP: %s, Port: %d", message, client);
+}
 
 void initializeServer() 
 {
@@ -67,44 +82,82 @@ void initializeServer()
 		printf("Bind failed with error code: %d", WSAGetLastError());
 		exit(EXIT_FAILURE);
 	}
-	puts("Bind done.\n");
+	printf("Bind done.\nServer Setup Done\n\nServer Port: %d\nServer Version: %d\n", SERVER_PORT, serverVersion);
+}
+
+void processMessage(string message, sockaddr_in client)
+{
+	string functionName = splitString(message, '~')[0];
+	if (functionMap.find(functionName) != functionMap.end()) {
+		functionMap[functionName](message, client);
+	}
+	else {
+		printf("Command with name %s does not exist.", functionName);
+	}
+}
+
+void sendMessage(string message, sockaddr_in client)
+{
+	const char* data = "test message";
+	if (sendto(server_socket, data, strlen(data), 0, (sockaddr*)&client, sizeof(sockaddr_in)) == SOCKET_ERROR)
+	{
+		printf("sendto() failed with error code: %d", WSAGetLastError());
+	}
 }
 
 
 int main()
 {
+	bindFunctions();
 	initializeServer();
 
 	while (true)
 	{
-		printf("Waiting for data...");
 		fflush(stdout);
 		char message[BUFFER_LEN] = {};
 
 		// try to receive some data, this is a blocking call
 		int message_len;
 		int slen = sizeof(sockaddr_in);
+		sockaddr_in client;
 		if (message_len = recvfrom(server_socket, message, BUFFER_LEN, 0, (sockaddr*)&client, &slen) == SOCKET_ERROR)
 		{
 			printf("recvfrom() failed with error code: %d", WSAGetLastError());
 			exit(0);
 		}
 
-		// print details of the client/peer and the data received
+		// print details of the client/peer and the data received and then process it
 		printf("Received packet from %s:%d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
 		printf("Data: %s\n", message);
+		processMessage(message, client);
 
 		cin.getline(message, BUFFER_LEN);
-
-		// reply the client with 2the same data
-		if (sendto(server_socket, message, strlen(message), 0, (sockaddr*)&client, sizeof(sockaddr_in)) == SOCKET_ERROR)
-		{
-			printf("sendto() failed with error code: %d", WSAGetLastError());
-			return 3;
-		}
 	}
 
+	printf("Closing Server...\n");
 	closesocket(server_socket);
+	printf("Done.\nCleaning Up...\n");
 	WSACleanup();
+	printf("Done, goodbye (:");
 	return 0;
+}
+
+
+
+
+//UTILL -------------------
+std::vector<std::string> splitString(const std::string& input, char delimiter) {
+	std::vector<std::string> result;
+	size_t start = 0;
+	size_t end = input.find(delimiter);
+
+	while (end != std::string::npos) {
+		result.push_back(input.substr(start, end - start));
+		start = end + 1;
+		end = input.find(delimiter, start);
+	}
+
+	result.push_back(input.substr(start));
+
+	return result;
 }
