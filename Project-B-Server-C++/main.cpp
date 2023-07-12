@@ -9,7 +9,7 @@
 #include <map>
 #include <string>
 
-using namespace std;
+//using namespace std;
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma warning(disable:4996) 
@@ -26,28 +26,55 @@ const int maxMessageID = 0;
 const int checksBeforeDisconnect = 3;
 const int serverVersion = -1;
 
-list<string> playerTransformInfo{};
-list<string> playerInfo{};
-list<int> currentPlauerIDs{};
-list<int> playerDisconnectTimers{};
-list<string> eventsToSend{};
-list<int> uMessageID{};
+std::list<std::string> playerTransformInfo{};
+std::list<std::string> playerInfo{};
+std::list<int> currentPlauerIDs{};
+std::list<int> playerDisconnectTimers{};
+std::list<std::string> eventsToSend{};
+std::list<int> uMessageID{};
 
 SOCKET server_socket;
 WSADATA wsa;
 sockaddr_in server;
 
-std::map<std::string, std::function<void(string, sockaddr_in)>> functionMap; //a map of all functions available to the clients
+std::map<std::string, std::function<void(std::string, sockaddr_in)>> functionMap; //a map of all functions available to the clients
 
-void bindFunctions() 
+//UTILL -------------------
+std::vector<std::string> splitString(const std::string& input, char delimiter) {
+	std::vector<std::string> result;
+	size_t start = 0;
+	size_t end = input.find(delimiter);
+
+	while (end != std::string::npos) {
+		result.push_back(input.substr(start, end - start));
+		start = end + 1;
+		end = input.find(delimiter, start);
+	}
+
+	result.push_back(input.substr(start));
+
+	return result;
+}
+void sendMessage(std::string message, sockaddr_in client)
 {
-	functionMap["tu"] = [](string message, sockaddr_in client) { updateTransform(message, client); };
+	const char* data = "test message";
+	if (sendto(server_socket, data, strlen(data), 0, (sockaddr*)&client, sizeof(sockaddr_in)) == SOCKET_ERROR)
+	{
+		printf("sendto() failed with error code: %d", WSAGetLastError());
+	}
 }
 
-void updateTransform(string message, sockaddr_in client)
+void updateTransform(std::string message, sockaddr_in client)
 {
 	//debug
-	printf("Message: %s, IP: %s, Port: %d", message, client);
+	std::cout << "Message: " << message << "IP: " << "Port: " << std::endl;
+}
+
+void ping(std::string message, sockaddr_in client)
+{
+	//debug
+	std::cout << "Message: " << message << "IP: " << "Port: " << std::endl;
+	sendMessage(std::to_string(serverVersion), client);
 }
 
 void initializeServer() 
@@ -85,26 +112,22 @@ void initializeServer()
 	printf("Bind done.\nServer Setup Done\n\nServer Port: %d\nServer Version: %d\n", SERVER_PORT, serverVersion);
 }
 
-void processMessage(string message, sockaddr_in client)
+void processMessage(std::string message, sockaddr_in client)
 {
-	string functionName = splitString(message, '~')[0];
+	std::string functionName = splitString(message, '~')[0];
 	if (functionMap.find(functionName) != functionMap.end()) {
 		functionMap[functionName](message, client);
 	}
 	else {
-		printf("Command with name %s does not exist.", functionName);
+		std::cout << "Command with name " << functionName << " does not exist." << std::endl;
 	}
 }
 
-void sendMessage(string message, sockaddr_in client)
+void bindFunctions()
 {
-	const char* data = "test message";
-	if (sendto(server_socket, data, strlen(data), 0, (sockaddr*)&client, sizeof(sockaddr_in)) == SOCKET_ERROR)
-	{
-		printf("sendto() failed with error code: %d", WSAGetLastError());
-	}
+	functionMap["tu"] = [](std::string message, sockaddr_in client) { updateTransform(message, client); };
+	functionMap["ping"] = [](std::string message, sockaddr_in client) { ping(message, client); };
 }
-
 
 int main()
 {
@@ -131,7 +154,7 @@ int main()
 		printf("Data: %s\n", message);
 		processMessage(message, client);
 
-		cin.getline(message, BUFFER_LEN);
+		std::cin.getline(message, BUFFER_LEN);
 	}
 
 	printf("Closing Server...\n");
@@ -140,24 +163,4 @@ int main()
 	WSACleanup();
 	printf("Done, goodbye (:");
 	return 0;
-}
-
-
-
-
-//UTILL -------------------
-std::vector<std::string> splitString(const std::string& input, char delimiter) {
-	std::vector<std::string> result;
-	size_t start = 0;
-	size_t end = input.find(delimiter);
-
-	while (end != std::string::npos) {
-		result.push_back(input.substr(start, end - start));
-		start = end + 1;
-		end = input.find(delimiter, start);
-	}
-
-	result.push_back(input.substr(start));
-
-	return result;
 }
