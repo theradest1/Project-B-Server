@@ -65,13 +65,37 @@ void sendMessage(std::string message, sockaddr_in client)
 
 
 //Client options -------------------------------
-void updateTransform(std::string message, sockaddr_in client)
+void updateTransform(std::string message, sockaddr_in client) //to do
+{
+}
+void updateEvent(std::string message, sockaddr_in client) //to do
+{
+}
+void newEvent(std::string message, sockaddr_in client) //to do
+{
+}
+void newClient(std::string message, sockaddr_in client) //to do
+{
+}
+void leave(std::string message, sockaddr_in client) //to do
 {
 }
 
 void ping(std::string message, sockaddr_in client)
 {
 	sendMessage(std::to_string(serverVersion), client);
+}
+
+
+//Server Functions -------------------------------
+void checkDisconnectTimers() //to do
+{
+}
+void disconnectClient() //to do
+{
+}
+void addEventToAll() //to do
+{
 }
 
 void initializeServer() 
@@ -124,6 +148,10 @@ void processMessage(std::string message, sockaddr_in client)
 void bindFunctions()
 {
 	functionMap["tu"] = [](std::string message, sockaddr_in client) { updateTransform(message, client); };
+	functionMap["eu"] = [](std::string message, sockaddr_in client) { updateEvent(message, client); };
+	functionMap["e"] = [](std::string message, sockaddr_in client) { newEvent(message, client); };
+	functionMap["newClient"] = [](std::string message, sockaddr_in client) { newClient(message, client); };
+	functionMap["leave"] = [](std::string message, sockaddr_in client) { leave(message, client); };
 	functionMap["ping"] = [](std::string message, sockaddr_in client) { ping(message, client); };
 }
 
