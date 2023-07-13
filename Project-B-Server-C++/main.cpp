@@ -283,9 +283,10 @@ int main()
 			exit(0);
 		}
 
-		// print details of the client/peer and the data received and then process it 
-		std::async(std::launch::async, processMessage, message, client); //async (:
-		//processMessage(message, client);
+		//process message
+		std::thread([=]() {
+			processMessage(message, client);
+		}).detach();
 	}
 
 	printf("Closing Server...\n");
