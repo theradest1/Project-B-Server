@@ -227,7 +227,7 @@ void initializeServer()
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
 	server.sin_port = htons(SERVER_PORT);
-	printf("Info Setting Done.\Binding...\n");
+	printf("Info Setting Done.\nBinding...\n");
 
 	// bind
 	if (bind(server_socket, (sockaddr*)&server, sizeof(server)) == SOCKET_ERROR)
@@ -271,6 +271,7 @@ int main()
 		int message_len;
 		int slen = sizeof(sockaddr_in);
 		sockaddr_in client;
+		std::cout << "Wating for packet..." << std::endl;
 		if (message_len = recvfrom(server_socket, message, BUFFER_LEN, 0, (sockaddr*)&client, &slen) == SOCKET_ERROR)
 		{
 			printf("recvfrom() failed with error code: %d", WSAGetLastError());
