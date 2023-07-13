@@ -10,6 +10,7 @@
 #include <string>
 #include <sstream>
 #include <ctime>
+#include <future>
 
 
 //using namespace std;
@@ -147,7 +148,7 @@ void newEvent(std::string message, sockaddr_in client)
 {
 	std::vector<std::string> splitInfo = splitString(message, '~');
 	std::string newEvent = message.substr(splitInfo[0].length() + 1, message.length());
-	std::cout << "New event added: " << newEvent << std::endl;
+	//std::cout << "New event added: " << newEvent << std::endl;
 	addEventToAll(newEvent);
 }
 void newClient(std::string message, sockaddr_in client)
@@ -239,7 +240,7 @@ void initializeServer()
 }
 void processMessage(std::string message, sockaddr_in client)
 {
-	std::cout << "Message: " << message << ", IP: " << inet_ntoa(client.sin_addr) << ", Port: " << ntohs(client.sin_port) << std::endl;
+	//std::cout << "Message: " << message << ", IP: " << inet_ntoa(client.sin_addr) << ", Port: " << ntohs(client.sin_port) << std::endl;
 	std::string functionName = splitString(message, '~')[0];
 	if (functionMap.find(functionName) != functionMap.end()) {
 		functionMap[functionName](message, client);
@@ -271,16 +272,15 @@ int main()
 		int message_len;
 		int slen = sizeof(sockaddr_in);
 		sockaddr_in client;
-		std::cout << "Wating for packet..." << std::endl;
 		if (message_len = recvfrom(server_socket, message, BUFFER_LEN, 0, (sockaddr*)&client, &slen) == SOCKET_ERROR)
 		{
 			printf("recvfrom() failed with error code: %d", WSAGetLastError());
 			exit(0);
 		}
 
-		// print details of the client/peer and the data received and then process it
-		processMessage(message, client);
-		std::cin.getline(message, BUFFER_LEN);
+		// print details of the client/peer and the data received and then process it 
+		std::async(std::launch::async, processMessage, message, client); //async (:
+		//processMessage(message, client);
 	}
 
 	printf("Closing Server...\n");
