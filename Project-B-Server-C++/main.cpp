@@ -1,7 +1,6 @@
 #include <iostream>
 #include <cstring>
 #include <iostream>
-#include <cstring>
 #include <winsock2.h>
 #include <list>
 #include <vector>
@@ -11,9 +10,7 @@
 #include <sstream>
 #include <ctime>
 #include <future>
-
-
-//using namespace std;
+#include <chrono>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma warning(disable:4996) 
@@ -23,10 +20,10 @@
 
 int currentID = 0;
 int currentUMessageID = 0;
+const int maxMessageID = 100;
 
 const int eventTPS = 40;
 const int transformTPS = 14;
-const int maxMessageID = 0;
 const int checksBeforeDisconnect = 3;
 const int serverVersion = -1;
 
@@ -158,7 +155,7 @@ void newClient(std::string message, sockaddr_in client)
 	addEventToAll("newClient~" + std::to_string(currentID) + '~' + splitInfo[1]);
 
 	//debug it
-	std::cout << "---------------------\nDate/Time: " << getCurrentDateTimeAsString() << "\nNew client: ID = " << currentID << ", Username: " << splitInfo[1] << std::endl;
+	std::cout << "---------------------\nDate/Time: " << getCurrentDateTimeAsString() << "\nNew client: ID = " << currentID << ", Username: " << splitInfo[1] << "\n---------------------" << std::endl;
 
 	std::string allPlayerJoinInfo = "";
 	for (int playerIndex : currentPlayerIDs) {
@@ -188,21 +185,27 @@ void ping(std::string message, sockaddr_in client)
 //Server Functions -------------------------------
 void checkDisconnectTimers()
 {
-	std::vector<int> playerIndexesToDisconnect{};
-	for (int playerListID = 0; playerListID < playerDisconnectTimers.size(); playerListID++) {
-		playerDisconnectTimers[playerListID]++;
-		if (playerDisconnectTimers[playerListID] > checksBeforeDisconnect) {
-			playerIndexesToDisconnect.push_back(playerListID);
-		}
-	}
+	std::thread([=]()
+	{
+		while (true) {
+			std::vector<int> playerIndexesToDisconnect{};
+			for (int playerListID = 0; playerListID < playerDisconnectTimers.size(); playerListID++) {
+				playerDisconnectTimers[playerListID]++;
+				if (playerDisconnectTimers[playerListID] > checksBeforeDisconnect) {
+					playerIndexesToDisconnect.push_back(playerListID);
+				}
+			}
 
-	//disconnect all of the players that timed out
-	if (playerIndexesToDisconnect.size() >= 1) {
-		for (int playerIndexID = 0; playerIndexID < playerIndexesToDisconnect.size(); playerIndexID++) {
-			std::cout << "Player with ID " << currentPlayerIDs[playerIndexesToDisconnect[playerIndexID]] << " has timed out." << std::endl;
-			disconnectClient(playerIndexesToDisconnect[playerIndexesToDisconnect.size() - 1 - playerIndexID]);
+			//disconnect all of the players that timed out
+			if (playerIndexesToDisconnect.size() >= 1) {
+				for (int playerIndexID = 0; playerIndexID < playerIndexesToDisconnect.size(); playerIndexID++) {
+					std::cout << "Player with ID " << currentPlayerIDs[playerIndexesToDisconnect[playerIndexID]] << " has timed out." << std::endl;
+					disconnectClient(playerIndexesToDisconnect[playerIndexesToDisconnect.size() - 1 - playerIndexID]);
+				}
+			}
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
-	}
+	}).detach();
 }
 void initializeServer() 
 {
@@ -262,6 +265,8 @@ int main()
 {
 	bindFunctions();
 	initializeServer();
+	//std::async(std::launch::async, checkDisconnectTimers);
+	checkDisconnectTimers();
 
 	while (true)
 	{
