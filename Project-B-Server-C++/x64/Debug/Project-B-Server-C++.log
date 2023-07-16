@@ -1,3 +1,0 @@
-﻿  main.cpp
-C:\Users\lando\OneDrive\Documents\GitRepos\Project-B-Server-2\Project-B-Server-C++\main.cpp(61,51): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
-C:\Users\lando\OneDrive\Documents\GitRepos\Project-B-Server-2\Project-B-Server-C++\main.cpp(81,13): warning C4244: 'return': conversion from '__int64' to 'int', possible loss of data
