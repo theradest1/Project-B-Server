@@ -159,6 +159,7 @@ void newClient(std::string message, sockaddr_in client)
 
 	std::string allPlayerJoinInfo = "";
 	for (int playerIndex : currentPlayerIDs) {
+		std::cout << playerIndex << "/" << currentPlayerIDs.size() << std::endl;
 		allPlayerJoinInfo += "newClient~" + currentPlayerIDs[playerIndex] + '~' + playerInfo[playerIndex] + " | ";
 	}
 	eventsToSend.push_back(allPlayerJoinInfo);
@@ -284,9 +285,9 @@ int main()
 		}
 
 		//process message
-		std::thread([=]() {
+		//std::thread([=]() {
 			processMessage(message, client);
-			}).detach();
+		//	}).detach();
 	}
 
 	printf("Closing Server...\n");
