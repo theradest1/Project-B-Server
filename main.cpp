@@ -286,7 +286,7 @@ int main()
 
 		//process message
 		//std::thread([=]() {
-			processMessage(message, client);
+		processMessage(message, client);
 		//	}).detach();
 	}
 
