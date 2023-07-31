@@ -22,8 +22,8 @@ int currentID = 0;
 int currentUMessageID = 0;
 const int maxMessageID = 100;
 
-const int eventTPS = 40;
-const int transformTPS = 14;
+const int eventTPS = 1;
+const int transformTPS = 1;
 const int checksBeforeDisconnect = 3;
 const int serverVersion = -1;
 
@@ -56,13 +56,28 @@ std::vector<std::string> splitString(const std::string& input, char delimiter) {
 
 	return result;
 }
+
+void logAllInfo() 
+{
+	std::cout << "----------------------" << std::endl << "All Debug:" << std::endl;
+	std::cout << "Total Players: " << currentPlayerIDs.size() << std::endl;
+	std::cout << "Player Info: " << std::endl;
+	for (unsigned int i = 0; i < currentPlayerIDs.size(); i++)
+	{
+		std::cout << "Player " << i << " with ID " << currentPlayerIDs[i] << ": " << playerTransformInfo[i] << std::endl;
+	}
+	std::cout << "----------------------" << std::endl;
+}
+
 void sendMessage(std::string message, sockaddr_in client)
 {
+	std::cout << "Sent message: " << message << std::endl;
 	if (sendto(server_socket, message.c_str(), strlen(message.c_str()), 0, (sockaddr*)&client, sizeof(sockaddr_in)) == SOCKET_ERROR)
 	{
 		printf("sendto() failed with error code: %d", WSAGetLastError());
 	}
 }
+
 std::string getCurrentDateTimeAsString() {
 	// Get the current time
 	std::time_t now = std::time(nullptr);
@@ -89,6 +104,7 @@ int getPlayerIndex(int playerID) {
 }
 void addEventToAll(std::string message)
 {
+	std::cout << "Added event: " << message << std::endl;
 	for (int i = 0; i < eventsToSend.size(); i++) {
 		eventsToSend[i] += message + "|";
 	}
@@ -109,7 +125,7 @@ void updateTransform(std::string message, sockaddr_in client)
 {
 	std::vector<std::string>splitInfo = splitString(message, '~');
 	std::string transformsToSend = "";
-	for (int playerIndex = 0; playerIndex < currentPlayerIDs.size(); playerIndex++) {
+	for (unsigned int playerIndex = 0; playerIndex < currentPlayerIDs.size(); playerIndex++) {
 		if (currentPlayerIDs[playerIndex] != std::stoi(splitInfo[1])) {
 			transformsToSend += "u~" + currentPlayerIDs[playerIndex] + '~' + playerTransformInfo[playerIndex] + "|";
 		}
@@ -145,7 +161,6 @@ void newEvent(std::string message, sockaddr_in client)
 {
 	std::vector<std::string> splitInfo = splitString(message, '~');
 	std::string newEvent = message.substr(splitInfo[0].length() + 1, message.length());
-	//std::cout << "New event added: " << newEvent << std::endl;
 	addEventToAll(newEvent);
 }
 void newClient(std::string message, sockaddr_in client)
@@ -158,8 +173,7 @@ void newClient(std::string message, sockaddr_in client)
 	std::cout << "---------------------\nDate/Time: " << getCurrentDateTimeAsString() << "\nNew client: ID = " << currentID << ", Username: " << splitInfo[1] << "\n---------------------" << std::endl;
 
 	std::string allPlayerJoinInfo = "";
-	for (int playerIndex : currentPlayerIDs) {
-		std::cout << playerIndex << "/" << currentPlayerIDs.size() << std::endl;
+	for (unsigned int playerIndex = 0; playerIndex < currentPlayerIDs.size(); playerIndex++) {
 		allPlayerJoinInfo += "newClient~" + currentPlayerIDs[playerIndex] + '~' + playerInfo[playerIndex] + " | ";
 	}
 	eventsToSend.push_back(allPlayerJoinInfo);
@@ -204,6 +218,9 @@ void checkDisconnectTimers()
 						disconnectClient(playerIndexesToDisconnect[playerIndexesToDisconnect.size() - 1 - playerIndexID]);
 					}
 				}
+
+				logAllInfo();
+
 				std::this_thread::sleep_for(std::chrono::seconds(1));
 			}
 		}).detach();
@@ -244,7 +261,7 @@ void initializeServer()
 }
 void processMessage(std::string message, sockaddr_in client)
 {
-	//std::cout << "Message: " << message << ", IP: " << inet_ntoa(client.sin_addr) << ", Port: " << ntohs(client.sin_port) << std::endl;
+	std::cout << "Got message: " << message << std::endl;
 	std::string functionName = splitString(message, '~')[0];
 	if (functionMap.find(functionName) != functionMap.end()) {
 		functionMap[functionName](message, client);
