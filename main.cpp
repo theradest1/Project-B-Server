@@ -1,17 +1,22 @@
 //this server is for universal multiplayer, but I am hopefully going to be using it in other things too
 #include <iostream>
 #include <winsock2.h>
+#include <string>
 
 #pragma comment(lib, "ws2_32.lib")
 
 constexpr int TCP_PORT = 4242;
 constexpr int UDP_PORT = 6969;
 
+const int BUFFER_LEN = 1024; //basically max message length
+
 void handleTCPClient(SOCKET clientSocket) {
-	char buffer[1024];
+	char message[BUFFER_LEN];
 	int bytesRead;
-	while ((bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0)) > 0) {
-		send(clientSocket, buffer, bytesRead, 0);
+	while ((bytesRead = recv(clientSocket, message, BUFFER_LEN, 0)) > 0) {
+		message[bytesRead] = '\0'; //null terminate message
+		std::cout << "TCP message recieved: " << message << std::endl;
+		send(clientSocket, message, bytesRead, 0);
 	}
 	closesocket(clientSocket);
 }
@@ -53,7 +58,7 @@ void createTCPServer() {
 		return;
 	}
 
-	std::cout << "TCP Server listening on port " << TCP_PORT << std::endl;
+	std::cout << "TCP Server listening on port " + std::to_string(TCP_PORT) + "\n" << std::endl;
 
 	while (true) {
 		clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddress, &clientAddressLength);
@@ -70,6 +75,7 @@ void createTCPServer() {
 }
 
 void createUDPServer() {
+
 	WSADATA wsaData;
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != 0) {
@@ -99,17 +105,17 @@ void createUDPServer() {
 		return;
 	}
 
-	std::cout << "UDP Server listening on port " << UDP_PORT << std::endl;
+	std::cout << "UDP Server listening on port " + std::to_string(UDP_PORT) + "\n" << std::endl;
 
 	while (true) {
-		char buffer[1024];
-		int bytesRead = recvfrom(serverSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddress, &clientAddressLength);
+		char message[BUFFER_LEN];
+		int bytesRead = recvfrom(serverSocket, message, BUFFER_LEN, 0, (struct sockaddr*)&clientAddress, &clientAddressLength);
 		if (bytesRead < 0) {
 			std::cerr << "Error receiving UDP data: " << WSAGetLastError() << std::endl;
 			continue;
 		}
-
-		sendto(serverSocket, buffer, bytesRead, 0, (struct sockaddr*)&clientAddress, clientAddressLength);
+		message[bytesRead] = '\0'; //null terminate message
+		std::cout << "Got udp message: " << message << std::endl;
 	}
 
 	closesocket(serverSocket);
