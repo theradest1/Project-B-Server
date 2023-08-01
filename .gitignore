@@ -433,3 +433,4 @@ FodyWeavers.xsd
 Project-B-Server-2.sln
 *.vcxproj
 *.filters
+output.txt
