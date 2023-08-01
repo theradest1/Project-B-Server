@@ -24,7 +24,7 @@ const int maxMessageID = 100;
 
 const int eventTPS = 1;
 const int transformTPS = 1;
-const int checksBeforeDisconnect = 3;
+const int checksBeforeDisconnect = 30;
 const int serverVersion = -1;
 
 std::vector<std::string> playerTransformInfo{};
@@ -59,13 +59,18 @@ std::vector<std::string> splitString(const std::string& input, char delimiter) {
 
 void logAllInfo() 
 {
-	std::cout << "----------------------" << std::endl << "All Debug:" << std::endl;
-	std::cout << "Total Players: " << currentPlayerIDs.size() << std::endl;
-	std::cout << "Player Info: " << std::endl;
+	std::cerr << "-----------\nTotal Players: " << std::to_string(currentPlayerIDs.size()) << "\nPlayer Info:\n" << std::endl;
+	std::cout << "-----------\nTotal Players: " << std::to_string(currentPlayerIDs.size()) << "\nPlayer Info:\n" << std::endl;
 	for (unsigned int i = 0; i < currentPlayerIDs.size(); i++)
 	{
-		std::cout << "Player " << i << " with ID " << currentPlayerIDs[i] << ": " << playerTransformInfo[i] << std::endl;
+		std::cerr << "Player " << i << " with ID " << currentPlayerIDs[i] << ": " << std::endl;
+		std::cout << "Player " << i << " with ID " << currentPlayerIDs[i] << ": " << std::endl;
+		std::cerr << "Transform: " << playerTransformInfo[i] << std::endl;
+		std::cout << "Transform: " << playerTransformInfo[i] << std::endl;
+		std::cerr << "Events: " << eventsToSend[i] << "\n" << std::endl;
+		std::cout << "Events: " << eventsToSend[i] << "\n" << std::endl;
 	}
+	std::cerr << "----------------------" << std::endl;
 	std::cout << "----------------------" << std::endl;
 }
 
@@ -90,6 +95,7 @@ std::string getCurrentDateTimeAsString() {
 
 	return dateTime;
 }
+
 int findIndex(std::vector<int> v, int element) {
 	auto it = std::find(v.begin(), v.end(), element);
 	if (it != v.end()) {
@@ -99,16 +105,20 @@ int findIndex(std::vector<int> v, int element) {
 		return -1;
 	}
 }
+
 int getPlayerIndex(int playerID) {
 	return findIndex(currentPlayerIDs, playerID);
 }
+
 void addEventToAll(std::string message)
 {
 	std::cout << "Added event: " << message << std::endl;
 	for (int i = 0; i < eventsToSend.size(); i++) {
 		eventsToSend[i] += message + "|";
+		std::cout << eventsToSend[i] << std::endl;
 	}
 }
+
 void disconnectClient(int playerIndex)
 {
 	addEventToAll("removeClient~" + currentPlayerIDs[playerIndex] + '|');
@@ -144,6 +154,7 @@ void updateTransform(std::string message, sockaddr_in client)
 		std::cout << "Player wth ID " << splitInfo[1] << " tried to update transform, but are not in game." << std::endl;
 	}
 }
+
 void updateEvent(std::string message, sockaddr_in client)
 {
 	std::vector<std::string>splitInfo = splitString(message, '~');
@@ -221,7 +232,7 @@ void checkDisconnectTimers()
 
 				logAllInfo();
 
-				std::this_thread::sleep_for(std::chrono::seconds(1));
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			}
 		}).detach();
 }
@@ -281,6 +292,13 @@ void bindFunctions()
 }
 int main()
 {
+	//make the program output to logs instead of terminal
+	bool outputFile = std::freopen("output.txt", "w", stdout);
+
+	if (!outputFile) {
+		return 0;
+	}
+
 	bindFunctions();
 	initializeServer();
 	//std::async(std::launch::async, checkDisconnectTimers);
