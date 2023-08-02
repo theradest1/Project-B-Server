@@ -27,8 +27,10 @@ void handleTCPClient(SOCKET clientSocket) {
 	char message[BUFFER_LEN] = {};
 	int bytesRead;
 	while ((bytesRead = recv(clientSocket, message, BUFFER_LEN, 0)) > 0) {
-		std::cout << "TCP message recieved: " << message << std::endl;
-		send(clientSocket, message, bytesRead, 0);
+		std::cout << message<< std::endl;
+
+		send(clientSocket, std::to_string(count).c_str(), bytesRead, 0);
+		count++;
 	}
 	closesocket(clientSocket);
 }
@@ -133,7 +135,7 @@ void createUDPServer() {
 		count++;
 
 		sendto(serverSocket, responseMessage.c_str(), strlen(message), 0, (sockaddr*)&clientAddress, clientAddressLength);
-		std::cout << "Got udp message from " << clientPort << ": " << message << std::endl;
+		std::cout << message<< std::endl;
 	}
 
 	closesocket(serverSocket);
