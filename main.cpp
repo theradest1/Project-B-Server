@@ -14,6 +14,9 @@ std::vector<std::string> clientTransforms{};
 
 int count = 0;
 
+SOCKET serverSocketUDP, serverSocketTCP, clientSocketTCP;
+WSADATA wsaDataUDP, wsaDataTCP;
+sockaddr_in serverAddressUDP, serverAddressTCP, clientAddressUDP, clientAddressTCP;
 
 
 const int BUFFER_LEN = 1024; //max message length
@@ -23,51 +26,53 @@ std::vector<std::string> clientIPs{};
 std::vector<int> clientUDPPorts{};
 std::vector<int> clientTCPPorts{};
 
+int clientAddressLength;
+
+void processTCPMessage(std::string message, SOCKET clientSocket)
+{
+	send(clientSocket, std::to_string(count).c_str(), bytesRead, 0);
+}
+
 void handleTCPClient(SOCKET clientSocket) {
 	char message[BUFFER_LEN] = {};
 	int bytesRead;
-	while ((bytesRead = recv(clientSocket, message, BUFFER_LEN, 0)) > 0) {
-		std::cout << message<< std::endl;
 
-		send(clientSocket, std::to_string(count).c_str(), bytesRead, 0);
-		count++;
+	while ((bytesRead = recv(clientSocket, message, BUFFER_LEN, 0)) > 0) {
+		std::cout << message << std::endl;
+		processTCPMessage(message, clientSocket);
 	}
 	closesocket(clientSocket);
 }
 
 void createTCPServer() {
-	WSADATA wsaData;
-	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	
+	int result = WSAStartup(MAKEWORD(2, 2), &wsaDataTCP);
 	if (result != 0) {
 		std::cerr << "WSAStartup failed with error: " << result << std::endl;
 		return;
 	}
 
-	SOCKET serverSocket, clientSocket;
-	sockaddr_in serverAddress, clientAddress;
-	int clientAddressLength = sizeof(clientAddress);
-
-	serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (serverSocket == INVALID_SOCKET) {
+	serverSocketTCP = socket(AF_INET, SOCK_STREAM, 0);
+	if (serverSocketTCP == INVALID_SOCKET) {
 		std::cerr << "Error creating TCP socket: " << WSAGetLastError() << std::endl;
 		WSACleanup();
 		return;
 	}
 
-	serverAddress.sin_family = AF_INET;
-	serverAddress.sin_addr.s_addr = INADDR_ANY;
-	serverAddress.sin_port = htons(TCP_PORT);
+	serverAddressTCP.sin_family = AF_INET;
+	serverAddressTCP.sin_addr.s_addr = INADDR_ANY;
+	serverAddressTCP.sin_port = htons(TCP_PORT);
 
-	if (bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
+	if (bind(serverSocketTCP, (struct sockaddr*)&serverAddressTCP, sizeof(serverAddressTCP)) == SOCKET_ERROR) {
 		std::cerr << "Error binding TCP socket: " << WSAGetLastError() << std::endl;
-		closesocket(serverSocket);
+		closesocket(serverSocketTCP);
 		WSACleanup();
 		return;
 	}
 
-	if (listen(serverSocket, 5) == SOCKET_ERROR) {
+	if (listen(serverSocketTCP, 5) == SOCKET_ERROR) {
 		std::cerr << "Error listening on TCP socket: " << WSAGetLastError() << std::endl;
-		closesocket(serverSocket);
+		closesocket(serverSocketTCP);
 		WSACleanup();
 		return;
 	}
@@ -75,72 +80,81 @@ void createTCPServer() {
 	std::cout << "TCP Server listening on port " + std::to_string(TCP_PORT) + "\n" << std::endl;
 
 	while (true) {
-		clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddress, &clientAddressLength);
-		if (clientSocket == INVALID_SOCKET) {
+		clientSocketTCP = accept(serverSocketTCP, (struct sockaddr*)&clientAddressTCP, &clientAddressLength);
+		if (clientSocketTCP == INVALID_SOCKET) {
 			std::cerr << "Error accepting TCP connection: " << WSAGetLastError() << std::endl;
 			continue;
 		}
 
-		handleTCPClient(clientSocket);
+		handleTCPClient(clientSocketTCP);
 	}
 
-	closesocket(serverSocket);
+	closesocket(serverSocketTCP);
 	WSACleanup();
 }
 
-void createUDPServer() {
 
-	WSADATA wsaData;
-	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+//udp ----------
+void sendUDPMessage(std::string message) 
+{
+	sendto(serverSocketUDP, message.c_str(), strlen(message.c_str()), 0, (sockaddr*)&clientAddressUDP, clientAddressLength);
+}
+
+void processUDPMessage(std::string message) 
+{
+	std::cout << message << std::endl;
+	sendUDPMessage("pong");
+}
+
+void udpReciever() {
+	while (true) {
+		char message[BUFFER_LEN] = {};
+
+		int bytesRead = recvfrom(serverSocketUDP, message, BUFFER_LEN, 0, (sockaddr*)&clientAddressUDP, &clientAddressLength);
+		if (bytesRead < 0) {
+			std::cerr << "Error receiving UDP data: " << WSAGetLastError() << std::endl;
+			continue;
+		};
+
+		processUDPMessage(message);
+	}
+}
+
+void createUDPServer() {
+	int result = WSAStartup(MAKEWORD(2, 2), &wsaDataUDP);
 	if (result != 0) {
 		std::cerr << "WSAStartup failed with error: " << result << std::endl;
 		return;
 	}
 
-	SOCKET serverSocket;
-	sockaddr_in serverAddress, clientAddress;
-	int clientAddressLength = sizeof(clientAddress);
+	clientAddressLength = sizeof(clientAddressUDP);
 
-	serverSocket = socket(AF_INET, SOCK_DGRAM, 0);
-	if (serverSocket == INVALID_SOCKET) {
+	serverSocketUDP= socket(AF_INET, SOCK_DGRAM, 0);
+	if (serverSocketUDP == INVALID_SOCKET) {
 		std::cerr << "Error creating UDP socket: " << WSAGetLastError() << std::endl;
 		WSACleanup();
 		return;
 	}
 
-	serverAddress.sin_family = AF_INET;
-	serverAddress.sin_addr.s_addr = INADDR_ANY;
-	serverAddress.sin_port = htons(UDP_PORT);
+	serverAddressUDP.sin_family = AF_INET;
+	serverAddressUDP.sin_addr.s_addr = INADDR_ANY;
+	serverAddressUDP.sin_port = htons(UDP_PORT);
 
-	if (bind(serverSocket, (sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
+	if (bind(serverSocketUDP, (sockaddr*)&serverAddressUDP, sizeof(serverAddressUDP)) == SOCKET_ERROR) {
 		std::cerr << "Error binding UDP socket: " << WSAGetLastError() << std::endl;
-		closesocket(serverSocket);
+		closesocket(serverSocketUDP);
 		WSACleanup();
 		return;
 	}
 
 	std::cout << "UDP Server listening on port " + std::to_string(UDP_PORT) + "\n" << std::endl;
 
-	while (true) {
-		char message[BUFFER_LEN] = {};
-		int bytesRead = recvfrom(serverSocket, message, BUFFER_LEN, 0, (sockaddr*)&clientAddress, &clientAddressLength);
-		if (bytesRead < 0) {
-			std::cerr << "Error receiving UDP data: " << WSAGetLastError() << std::endl;
-			continue;
-		}
+	udpReciever();
 
-		unsigned short clientPort = ntohs(clientAddress.sin_port);
-
-		std::string responseMessage = std::to_string(count);
-		count++;
-
-		sendto(serverSocket, responseMessage.c_str(), strlen(message), 0, (sockaddr*)&clientAddress, clientAddressLength);
-		std::cout << message<< std::endl;
-	}
-
-	closesocket(serverSocket);
+	closesocket(serverSocketUDP);
 	WSACleanup();
 }
+
 
 int main() {
 	// Run both TCP and UDP servers concurrently
