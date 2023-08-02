@@ -2,6 +2,7 @@
 #include <iostream>
 #include <winsock2.h>
 #include <string>
+#include <vector>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -10,11 +11,15 @@ constexpr int UDP_PORT = 6969;
 
 const int BUFFER_LEN = 1024; //basically max message length
 
+std::vector<int> clientIDs{};
+std::vector<std::string> clientIPs{};
+std::vector<int> clientUDPPorts{};
+std::vector<int> clientTCPPorts{};
+
 void handleTCPClient(SOCKET clientSocket) {
-	char message[BUFFER_LEN];
+	char message[BUFFER_LEN] = {};
 	int bytesRead;
 	while ((bytesRead = recv(clientSocket, message, BUFFER_LEN, 0)) > 0) {
-		message[bytesRead] = '\0'; //null terminate message
 		std::cout << "TCP message recieved: " << message << std::endl;
 		send(clientSocket, message, bytesRead, 0);
 	}
@@ -108,13 +113,13 @@ void createUDPServer() {
 	std::cout << "UDP Server listening on port " + std::to_string(UDP_PORT) + "\n" << std::endl;
 
 	while (true) {
-		char message[BUFFER_LEN];
-		int bytesRead = recvfrom(serverSocket, message, BUFFER_LEN, 0, (struct sockaddr*)&clientAddress, &clientAddressLength);
+		char message[BUFFER_LEN] = {};
+		int bytesRead = recvfrom(serverSocket, message, BUFFER_LEN, 0, (sockaddr*)&clientAddress, &clientAddressLength);
 		if (bytesRead < 0) {
 			std::cerr << "Error receiving UDP data: " << WSAGetLastError() << std::endl;
 			continue;
 		}
-		message[bytesRead] = '\0'; //null terminate message
+		sendto(serverSocket, message, strlen(message), 0, (sockaddr*)&clientAddress, clientAddressLength);
 		std::cout << "Got udp message: " << message << std::endl;
 	}
 
