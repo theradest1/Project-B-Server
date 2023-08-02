@@ -12,6 +12,8 @@ constexpr int UDP_PORT = 6969;
 
 std::vector<std::string> clientTransforms{};
 
+int count = 0;
+
 
 
 const int BUFFER_LEN = 1024; //max message length
@@ -127,7 +129,10 @@ void createUDPServer() {
 
 		unsigned short clientPort = ntohs(clientAddress.sin_port);
 
-		sendto(serverSocket, message, strlen(message), 0, (sockaddr*)&clientAddress, clientAddressLength);
+		std::string responseMessage = std::to_string(count);
+		count++;
+
+		sendto(serverSocket, responseMessage.c_str(), strlen(message), 0, (sockaddr*)&clientAddress, clientAddressLength);
 		std::cout << "Got udp message from " << clientPort << ": " << message << std::endl;
 	}
 
