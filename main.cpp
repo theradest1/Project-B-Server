@@ -3,13 +3,18 @@
 #include <winsock2.h>
 #include <string>
 #include <vector>
+#include <Ws2tcpip.h>
 
 #pragma comment(lib, "ws2_32.lib")
 
 constexpr int TCP_PORT = 4242;
 constexpr int UDP_PORT = 6969;
 
-const int BUFFER_LEN = 1024; //basically max message length
+std::vector<std::string> clientTransforms{};
+
+
+
+const int BUFFER_LEN = 1024; //max message length
 
 std::vector<int> clientIDs{};
 std::vector<std::string> clientIPs{};
@@ -103,7 +108,7 @@ void createUDPServer() {
 	serverAddress.sin_addr.s_addr = INADDR_ANY;
 	serverAddress.sin_port = htons(UDP_PORT);
 
-	if (bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
+	if (bind(serverSocket, (sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
 		std::cerr << "Error binding UDP socket: " << WSAGetLastError() << std::endl;
 		closesocket(serverSocket);
 		WSACleanup();
@@ -119,8 +124,11 @@ void createUDPServer() {
 			std::cerr << "Error receiving UDP data: " << WSAGetLastError() << std::endl;
 			continue;
 		}
+
+		unsigned short clientPort = ntohs(clientAddress.sin_port);
+
 		sendto(serverSocket, message, strlen(message), 0, (sockaddr*)&clientAddress, clientAddressLength);
-		std::cout << "Got udp message from "<<  << ": " << message << std::endl;
+		std::cout << "Got udp message from " << clientPort << ": " << message << std::endl;
 	}
 
 	closesocket(serverSocket);
