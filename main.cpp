@@ -120,7 +120,7 @@ void createUDPServer() {
 			continue;
 		}
 		sendto(serverSocket, message, strlen(message), 0, (sockaddr*)&clientAddress, clientAddressLength);
-		std::cout << "Got udp message: " << message << std::endl;
+		std::cout << "Got udp message from "<<  << ": " << message << std::endl;
 	}
 
 	closesocket(serverSocket);
