@@ -29,6 +29,30 @@ std::vector<int> clientTCPPorts{};
 
 std::vector<std::string> tcpMessagesToSend{};
 
+//utill ----------
+std::vector<std::string> splitString(const std::string& input, char delimiter) {
+	std::vector<std::string> result;
+	std::string current;
+
+	for (char c : input) {
+		if (c == delimiter) {
+			result.push_back(current);
+			current.clear();
+		}
+		else {
+			current += c;
+		}
+	}
+
+	// Don't forget to add the last segment if the string doesn't end with the delimiter.
+	if (!current.empty()) {
+		result.push_back(current);
+	}
+
+	return result;
+}
+
+
 //tcp ------------
 void handleTCPClient(SOCKET clientSocket) {
 	int clientID = currentClientID;
@@ -57,14 +81,16 @@ void handleTCPClient(SOCKET clientSocket) {
 			break;
 		}
 		else {
-			// Handle the received message
-			std::string finalMessage = message;
-			std::cout << "Got TCP message from " + std::to_string(clientID) + ": " + finalMessage << std::endl;
-			if (finalMessage == "ping") {
-				std::string response = "pong";
-				int len = response.length();
-				std::cout << "sent pong" << std::endl;
-				send(clientSocket, response.c_str(), len, 0);
+			std::vector<std::string> messages = splitString(message, '|');
+			//loop through messsages
+			for(std::string finalMessage : messages) {
+				//std::cout << "Got TCP message: " + finalMessage << std::endl;
+
+				if (finalMessage == "ping") {
+					std::string response = "pong";
+					int len = response.length();
+					send(clientSocket, response.c_str(), len, 0);
+				}
 			}
 		}
 	}
@@ -157,12 +183,12 @@ void udpReciever() {
 
 		std::string finalMessage = message;
 
-		if (finalMessage != "ping") {
-			processUDPMessage(finalMessage);
+		processUDPMessage(finalMessage);
+		if(finalMessage == "ping") {
+			sendUDPMessage("pong", clientAddress, clientAddressLength);
 		}
 		else {
-			std::cout << "sent pong" << std::endl;
-			sendUDPMessage("pong", clientAddress, clientAddressLength);
+			sendUDPMessage("awhdhakwhdkhakwhkhawtgfauwyrgyagfkeasfgwuagefkaywetgfyuagwyfkgayuwkgfkeajfgbjakgefd", clientAddress, clientAddressLength);
 		}
 	}
 }
