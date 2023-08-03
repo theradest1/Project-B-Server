@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <Ws2tcpip.h>
+#include <thread>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -14,10 +15,10 @@ std::vector<std::string> clientTransforms{};
 
 int count = 0;
 
-SOCKET serverSocketUDP, serverSocketTCP, clientSocketTCP;
-WSADATA wsaDataUDP, wsaDataTCP;
-sockaddr_in serverAddressUDP, serverAddressTCP, clientAddressUDP, clientAddressTCP;
+SOCKET serverSocketUDP, serverSocketTCP;
+sockaddr_in serverAddressUDP, serverAddressTCP;
 
+std::vector<sockaddr_in> clients{};
 
 const int BUFFER_LEN = 1024; //max message length
 
@@ -26,27 +27,31 @@ std::vector<std::string> clientIPs{};
 std::vector<int> clientUDPPorts{};
 std::vector<int> clientTCPPorts{};
 
-int clientAddressLength;
-
-void processTCPMessage(std::string message, SOCKET clientSocket)
+void processTCPMessage(std::string message)
 {
-	send(clientSocket, std::to_string(count).c_str(), bytesRead, 0);
+	std::cout << "Got TCP message: " + message << std::endl;
 }
 
 void handleTCPClient(SOCKET clientSocket) {
+	std::cout << "Opened tcp socket" << std::endl;
+
 	char message[BUFFER_LEN] = {};
 	int bytesRead;
 
+	//keep checking for messages, process them if there is one
 	while ((bytesRead = recv(clientSocket, message, BUFFER_LEN, 0)) > 0) {
 		std::cout << message << std::endl;
-		processTCPMessage(message, clientSocket);
+		processTCPMessage(message);
 	}
+	std::cout << "Closed tcp socket" << std::endl;
 	closesocket(clientSocket);
 }
 
 void createTCPServer() {
-	
-	int result = WSAStartup(MAKEWORD(2, 2), &wsaDataTCP);
+	WSADATA wsaData;
+
+
+	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != 0) {
 		std::cerr << "WSAStartup failed with error: " << result << std::endl;
 		return;
@@ -79,14 +84,21 @@ void createTCPServer() {
 
 	std::cout << "TCP Server listening on port " + std::to_string(TCP_PORT) + "\n" << std::endl;
 
+	//checking for new clients
+	sockaddr_in clientAddress;
+	int clientAddressLength = sizeof(clientAddress);
+	SOCKET clientSocket;
+
 	while (true) {
-		clientSocketTCP = accept(serverSocketTCP, (struct sockaddr*)&clientAddressTCP, &clientAddressLength);
-		if (clientSocketTCP == INVALID_SOCKET) {
+		clientSocket = accept(serverSocketTCP, (struct sockaddr*)&clientAddress, &clientAddressLength);
+		if (clientSocket == INVALID_SOCKET) {
 			std::cerr << "Error accepting TCP connection: " << WSAGetLastError() << std::endl;
 			continue;
 		}
 
-		handleTCPClient(clientSocketTCP);
+		//open a new thread for a client
+		std::thread clientThread(handleTCPClient, clientSocket);
+		clientThread.detach();
 	}
 
 	closesocket(serverSocketTCP);
@@ -95,39 +107,45 @@ void createTCPServer() {
 
 
 //udp ----------
-void sendUDPMessage(std::string message) 
+void sendUDPMessage(std::string message, sockaddr_in clientAddressUDP, int clientAddressLength)
 {
 	sendto(serverSocketUDP, message.c_str(), strlen(message.c_str()), 0, (sockaddr*)&clientAddressUDP, clientAddressLength);
 }
 
 void processUDPMessage(std::string message) 
 {
-	std::cout << message << std::endl;
-	sendUDPMessage("pong");
+	std::cout << "Got UDP message: " + message << std::endl;
 }
 
 void udpReciever() {
+	sockaddr_in clientAddress;
+	int clientAddressLength = sizeof(clientAddress);
+
 	while (true) {
 		char message[BUFFER_LEN] = {};
 
-		int bytesRead = recvfrom(serverSocketUDP, message, BUFFER_LEN, 0, (sockaddr*)&clientAddressUDP, &clientAddressLength);
+		int bytesRead = recvfrom(serverSocketUDP, message, BUFFER_LEN, 0, (sockaddr*)&clientAddress, &clientAddressLength);
 		if (bytesRead < 0) {
 			std::cerr << "Error receiving UDP data: " << WSAGetLastError() << std::endl;
 			continue;
 		};
 
-		processUDPMessage(message);
+		if (message != "ping") {
+			processUDPMessage(message);
+		}
+		else {
+			sendUDPMessage("pong", clientAddress, clientAddressLength);
+		}
 	}
 }
 
 void createUDPServer() {
-	int result = WSAStartup(MAKEWORD(2, 2), &wsaDataUDP);
+	WSADATA wsaData;
+	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != 0) {
 		std::cerr << "WSAStartup failed with error: " << result << std::endl;
 		return;
 	}
-
-	clientAddressLength = sizeof(clientAddressUDP);
 
 	serverSocketUDP= socket(AF_INET, SOCK_DGRAM, 0);
 	if (serverSocketUDP == INVALID_SOCKET) {
