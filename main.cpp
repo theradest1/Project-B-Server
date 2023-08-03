@@ -13,7 +13,7 @@ constexpr int UDP_PORT = 6969;
 
 std::vector<std::string> clientTransforms{};
 
-int count = 0;
+int currentClientID = 0;
 
 SOCKET serverSocketUDP, serverSocketTCP;
 sockaddr_in serverAddressUDP, serverAddressTCP;
@@ -27,29 +27,54 @@ std::vector<std::string> clientIPs{};
 std::vector<int> clientUDPPorts{};
 std::vector<int> clientTCPPorts{};
 
-void processTCPMessage(std::string message)
-{
-	std::cout << "Got TCP message: " + message << std::endl;
-}
+std::vector<std::string> tcpMessagesToSend{};
 
+//tcp ------------
 void handleTCPClient(SOCKET clientSocket) {
+	int clientID = currentClientID;
+	currentClientID++;
+
 	std::cout << "Opened tcp socket" << std::endl;
+
+	u_long mode = 1; // Set non-blocking mode on Windows
+	ioctlsocket(clientSocket, FIONBIO, &mode);
 
 	char message[BUFFER_LEN] = {};
 	int bytesRead;
 
-	//keep checking for messages, process them if there is one
-	while ((bytesRead = recv(clientSocket, message, BUFFER_LEN, 0)) > 0) {
-		std::cout << message << std::endl;
-		processTCPMessage(message);
+	while (true) {
+		bytesRead = recv(clientSocket, message, BUFFER_LEN, 0);
+
+		if (bytesRead == SOCKET_ERROR) {
+			int error = WSAGetLastError();
+			if (error != WSAEWOULDBLOCK) {
+				std::cerr << "Error in recv: " << error << std::endl;
+				break;
+			}
+		}
+		else if (bytesRead == 0) {
+			std::cout << "Connection closed by the client" << std::endl;
+			break;
+		}
+		else {
+			// Handle the received message
+			std::string finalMessage = message;
+			std::cout << "Got TCP message from " + std::to_string(clientID) + ": " + finalMessage << std::endl;
+			if (finalMessage == "ping") {
+				std::string response = "pong";
+				int len = response.length();
+				std::cout << "sent pong" << std::endl;
+				send(clientSocket, response.c_str(), len, 0);
+			}
+		}
 	}
+
 	std::cout << "Closed tcp socket" << std::endl;
 	closesocket(clientSocket);
 }
 
 void createTCPServer() {
 	WSADATA wsaData;
-
 
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != 0) {
@@ -114,7 +139,7 @@ void sendUDPMessage(std::string message, sockaddr_in clientAddressUDP, int clien
 
 void processUDPMessage(std::string message) 
 {
-	std::cout << "Got UDP message: " + message << std::endl;
+	//std::cout << "Got UDP message: " + message << std::endl;
 }
 
 void udpReciever() {
@@ -130,10 +155,13 @@ void udpReciever() {
 			continue;
 		};
 
-		if (message != "ping") {
-			processUDPMessage(message);
+		std::string finalMessage = message;
+
+		if (finalMessage != "ping") {
+			processUDPMessage(finalMessage);
 		}
 		else {
+			std::cout << "sent pong" << std::endl;
 			sendUDPMessage("pong", clientAddress, clientAddressLength);
 		}
 	}
