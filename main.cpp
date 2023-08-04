@@ -32,6 +32,35 @@ std::vector<int> clientTCPPorts{};
 std::vector<std::string> tcpMessagesToSend{};
 
 //utill ----------
+int findIndex(std::vector<int> v, int element) {
+	auto it = std::find(v.begin(), v.end(), element);
+	if (it != v.end()) {
+		return it - v.begin();
+	}
+	else {
+		return -1;
+	}
+}
+int getClientIndex(int clientID) 
+{
+	int clientIndex = findIndex(clientIDs, clientID);
+	if (clientIndex == -1) {
+		std::cout << "Could not find client index: " << clientID << std::endl;
+	}
+	return clientIndex;
+}
+void addClientData(int clientID)
+{
+	clientIDs.push_back(clientID);
+	tcpMessagesToSend.push_back("");
+}
+void removeClientData(int clientID)
+{
+	int index = getClientIndex(clientID);
+
+	clientIDs.erase(clientIDs.begin() + index);
+	tcpMessagesToSend.erase(tcpMessagesToSend.begin() + index);
+}
 std::vector<std::string> splitString(const std::string& input, char delimiter) {
 	std::vector<std::string> result;
 	std::string current;
@@ -52,28 +81,9 @@ std::vector<std::string> splitString(const std::string& input, char delimiter) {
 
 	return result;
 }
-
-int findIndex(std::vector<int> v, int element) {
-	auto it = std::find(v.begin(), v.end(), element);
-	if (it != v.end()) {
-		return it - v.begin();
-	}
-	else {
-		return -1;
-	}
-}
-
-int getClientIndex(int clientID) 
-{
-	int clientIndex = findIndex(clientIDs, clientID);
-	if (clientIndex == -1) {
-		std::cout << "Could not find client index: " << clientID << std::endl;
-	}
-	return clientIndex;
-}
-
 void addTCPMessageToAll(std::string message) 
 {
+	std::cout << "Added event: " << message << std::endl;
 	for (int index = 0; index < tcpMessagesToSend.size(); index++) {
 		tcpMessagesToSend[index] += message + "|";
 	}
@@ -92,10 +102,8 @@ void handleTCPClient(SOCKET clientSocket) {
 	//get socket ID
 	int clientID = currentClientID;
 	currentClientID++;
+	addClientData(clientID);
 
-	//start data in vectors
-	clientIDs.push_back(clientID);
-	tcpMessagesToSend.push_back("");
 
 	//set non-blocking
 	u_long mode = 1;
@@ -119,6 +127,7 @@ void handleTCPClient(SOCKET clientSocket) {
 		else if (bytesRead == 0) {
 			std::cout << "Stream " << clientID << " closed by the client" << std::endl;
 			closesocket(clientSocket);
+			removeClientData(clientID);
 			return;
 		}
 		else {
@@ -129,6 +138,7 @@ void handleTCPClient(SOCKET clientSocket) {
 					sendTCPMessage(clientSocket, "pong");
 				}
 				else {
+					std::cout << "Got TCP message: " << finalMessage << std::endl;
 					addTCPMessageToAll(finalMessage);
 				}
 			}
@@ -151,6 +161,7 @@ void handleTCPClient(SOCKET clientSocket) {
 
 	//close stream
 	std::cout << "Stream " << clientID << " closed by the server" << std::endl;
+	removeClientData(clientID);
 	closesocket(clientSocket);
 }
 
@@ -210,7 +221,6 @@ void createTCPServer() {
 	closesocket(serverSocketTCP);
 	WSACleanup();
 }
-
 
 //udp ----------
 void sendUDPMessage(std::string message, sockaddr_in clientAddressUDP, int clientAddressLength)
