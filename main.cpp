@@ -22,6 +22,8 @@ std::vector<sockaddr_in> clients{};
 
 const int BUFFER_LEN = 1024; //max message length
 
+bool serverOnline = true; //set to false to close all tcp streams
+
 std::vector<int> clientIDs{};
 std::vector<std::string> clientIPs{};
 std::vector<int> clientUDPPorts{};
@@ -44,7 +46,6 @@ std::vector<std::string> splitString(const std::string& input, char delimiter) {
 		}
 	}
 
-	// Don't forget to add the last segment if the string doesn't end with the delimiter.
 	if (!current.empty()) {
 		result.push_back(current);
 	}
@@ -52,21 +53,60 @@ std::vector<std::string> splitString(const std::string& input, char delimiter) {
 	return result;
 }
 
+int findIndex(std::vector<int> v, int element) {
+	auto it = std::find(v.begin(), v.end(), element);
+	if (it != v.end()) {
+		return it - v.begin();
+	}
+	else {
+		return -1;
+	}
+}
+
+int getClientIndex(int clientID) 
+{
+	int clientIndex = findIndex(clientIDs, clientID);
+	if (clientIndex == -1) {
+		std::cout << "Could not find client index: " << clientID << std::endl;
+	}
+	return clientIndex;
+}
+
+void addTCPMessageToAll(std::string message) 
+{
+	for (int index = 0; index < tcpMessagesToSend.size(); index++) {
+		tcpMessagesToSend[index] += message + "|";
+	}
+}
 
 //tcp ------------
+void sendTCPMessage(SOCKET clientSocket, std::string message) {
+	message += "|";
+	int len = message.length();
+	send(clientSocket, message.c_str(), len, 0);
+}
+
 void handleTCPClient(SOCKET clientSocket) {
+	std::cout << "Opened tcp socket" << std::endl;
+
+	//get socket ID
 	int clientID = currentClientID;
 	currentClientID++;
 
-	std::cout << "Opened tcp socket" << std::endl;
+	//start data in vectors
+	clientIDs.push_back(clientID);
+	tcpMessagesToSend.push_back("");
 
-	u_long mode = 1; // Set non-blocking mode on Windows
+	//set non-blocking
+	u_long mode = 1;
 	ioctlsocket(clientSocket, FIONBIO, &mode);
 
+	//read vars
 	char message[BUFFER_LEN] = {};
 	int bytesRead;
 
-	while (true) {
+	while (serverOnline) {
+		//read from stream
 		bytesRead = recv(clientSocket, message, BUFFER_LEN, 0);
 
 		if (bytesRead == SOCKET_ERROR) {
@@ -77,25 +117,40 @@ void handleTCPClient(SOCKET clientSocket) {
 			}
 		}
 		else if (bytesRead == 0) {
-			std::cout << "Connection closed by the client" << std::endl;
-			break;
+			std::cout << "Stream " << clientID << " closed by the client" << std::endl;
+			closesocket(clientSocket);
+			return;
 		}
 		else {
+			//loop through messsages (they get mashed)
 			std::vector<std::string> messages = splitString(message, '|');
-			//loop through messsages
 			for(std::string finalMessage : messages) {
-				//std::cout << "Got TCP message: " + finalMessage << std::endl;
-
 				if (finalMessage == "ping") {
-					std::string response = "pong";
-					int len = response.length();
-					send(clientSocket, response.c_str(), len, 0);
+					sendTCPMessage(clientSocket, "pong");
+				}
+				else {
+					addTCPMessageToAll(finalMessage);
 				}
 			}
 		}
+
+		int clientIndex = getClientIndex(clientID);
+		if (clientIndex == -1) {
+			std::cout << "Closing TCP stream since there is no active ID" << std::endl;
+			closesocket(clientSocket);
+			return;
+		}
+
+		//write to stream
+		if (tcpMessagesToSend[clientIndex] != "")
+		{
+			sendTCPMessage(clientSocket, tcpMessagesToSend[clientIndex]);
+			tcpMessagesToSend[clientIndex] = "";
+		}
 	}
 
-	std::cout << "Closed tcp socket" << std::endl;
+	//close stream
+	std::cout << "Stream " << clientID << " closed by the server" << std::endl;
 	closesocket(clientSocket);
 }
 
