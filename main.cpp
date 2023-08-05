@@ -5,6 +5,7 @@
 #include <vector>
 #include <Ws2tcpip.h>
 #include <thread>
+#include <fstream>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -106,8 +107,8 @@ void handleTCPClient(SOCKET clientSocket) {
 
 
 	//set non-blocking
-	u_long mode = 1;
-	ioctlsocket(clientSocket, FIONBIO, &mode);
+	//u_long mode = 1;
+	//ioctlsocket(clientSocket, FIONBIO, &mode);
 
 	//read vars
 	char message[BUFFER_LEN] = {};
@@ -131,6 +132,8 @@ void handleTCPClient(SOCKET clientSocket) {
 			return;
 		}
 		else {
+			std::cout << "(" << bytesRead << ") Got TCP message: " << message << std::endl;
+
 			//loop through messsages (they get mashed)
 			std::vector<std::string> messages = splitString(message, '|');
 			for(std::string finalMessage : messages) {
@@ -138,7 +141,7 @@ void handleTCPClient(SOCKET clientSocket) {
 					sendTCPMessage(clientSocket, "pong");
 				}
 				else {
-					std::cout << "Got TCP message: " << finalMessage << std::endl;
+					//std::cout << "Got TCP message: " << finalMessage << std::endl;
 					addTCPMessageToAll(finalMessage);
 				}
 			}
@@ -294,6 +297,11 @@ void createUDPServer() {
 
 
 int main() {
+	//set console output to file
+	/*std::ofstream out("output.txt");
+	std::streambuf* coutbuf = std::cout.rdbuf();
+	std::cout.rdbuf(out.rdbuf());*/
+
 	// Run both TCP and UDP servers concurrently
 	if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)createTCPServer, NULL, 0, NULL) == NULL) {
 		std::cerr << "Error creating TCP server thread" << std::endl;
