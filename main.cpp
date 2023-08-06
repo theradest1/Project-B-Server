@@ -90,7 +90,9 @@ void addTCPMessageToAll(std::string message)
 }
 
 //tcp ------------
-void sendTCPMessage(SOCKET clientSocket, std::string message) {
+void sendTCPMessage(SOCKET clientSocket, std::string message)
+{
+	std::cout << "Sent TCP message: " << message << std::endl;
 	message += "|";
 	int len = message.length();
 	send(clientSocket, message.c_str(), len, 0);
@@ -115,7 +117,7 @@ void handleTCPClient(SOCKET clientSocket) {
 
 	while (serverOnline) {
 		//read from stream
-		bytesRead = recv(clientSocket, message, BUFFER_LEN, 0);
+		bytesRead = recv(clientSocket, message, sizeof(message), 0);
 
 		if (bytesRead == SOCKET_ERROR) {
 			int error = WSAGetLastError();
