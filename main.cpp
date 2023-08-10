@@ -21,14 +21,14 @@ sockaddr_in serverAddressUDP, serverAddressTCP;
 
 std::vector<sockaddr_in> clients{};
 
-const int BUFFER_LEN = 1024; //max message length
+const int BUFFER_LEN = 2048; //max message length
 
 bool serverOnline = true; //set to false to close all tcp streams
 
 std::vector<int> clientIDs{};
 std::vector<std::string> clientIPs{};
-std::vector<int> clientUDPPorts{};
-std::vector<int> clientTCPPorts{};
+std::vector<sockaddr_in> clientUDPSockets{};
+//std::vector<int> clientTCPPorts{};
 
 std::vector<std::string> tcpMessagesToSend{};
 
@@ -54,13 +54,22 @@ void addClientData(int clientID)
 {
 	clientIDs.push_back(clientID);
 	tcpMessagesToSend.push_back("");
+	//udp socket added on first udp message
 }
 void removeClientData(int clientID)
 {
 	int index = getClientIndex(clientID);
 
-	clientIDs.erase(clientIDs.begin() + index);
-	tcpMessagesToSend.erase(tcpMessagesToSend.begin() + index);
+	try
+	{
+		clientIDs.erase(clientIDs.begin() + index);
+		tcpMessagesToSend.erase(tcpMessagesToSend.begin() + index);
+		clientUDPSockets.erase(clientUDPSockets.begin() + index);
+	}
+	catch (const std::exception&)
+	{
+		std::cout << "Tried to remove client " << clientID << " data, but it doesnt exist" << std::endl;
+	}
 }
 std::vector<std::string> splitString(const std::string& input, char delimiter) {
 	std::vector<std::string> result;
@@ -84,10 +93,15 @@ std::vector<std::string> splitString(const std::string& input, char delimiter) {
 }
 void addTCPMessageToAll(std::string message) 
 {
-	std::cout << "Added event: " << message << std::endl;
+	//std::cout << "Added event: " << message << std::endl;
 	for (int index = 0; index < tcpMessagesToSend.size(); index++) {
 		tcpMessagesToSend[index] += message + "|";
 	}
+}
+
+void addTCPMessage(int clientID, std::string message)
+{
+	tcpMessagesToSend[getClientIndex(clientID)] += message + "|";
 }
 
 std::string subCharArray(char arr[], int start, int length)
@@ -104,7 +118,7 @@ std::string subCharArray(char arr[], int start, int length)
 //tcp ------------
 void sendTCPMessage(SOCKET clientSocket, std::string message)
 {
-	std::cout << "Sent TCP message: " << message << std::endl;
+	//std::cout << "Sent TCP message: " << message << std::endl;
 	message += "|";
 	int len = message.length();
 	send(clientSocket, message.c_str(), len, 0);
@@ -117,11 +131,11 @@ void handleTCPClient(SOCKET clientSocket) {
 	int clientID = currentClientID;
 	currentClientID++;
 	addClientData(clientID);
-
+	addTCPMessage(clientID, "clientInfo~" + std::to_string(clientID));
 
 	//set non-blocking
-	//u_long mode = 1;
-	//ioctlsocket(clientSocket, FIONBIO, &mode);
+	u_long mode = 1;
+	ioctlsocket(clientSocket, FIONBIO, &mode);
 
 	//read vars
 	char message[BUFFER_LEN] = {};
@@ -145,9 +159,9 @@ void handleTCPClient(SOCKET clientSocket) {
 			return;
 		}
 		else {
-			//have to cut message because of tcp things
+			//have to cut message because of tcp stream echoes
 			std::string cutMessage = subCharArray(message, 0, bytesRead);
-			std::cout << "(" << bytesRead << ") Got TCP message: " << cutMessage << std::endl;
+			//std::cout << "(" << bytesRead << ") Got TCP message: " << cutMessage << std::endl;
 
 			//loop through messsages (they get mashed)
 			std::vector<std::string> messages = splitString(cutMessage, '|');
@@ -246,9 +260,20 @@ void sendUDPMessage(std::string message, sockaddr_in clientAddressUDP, int clien
 	sendto(serverSocketUDP, message.c_str(), strlen(message.c_str()), 0, (sockaddr*)&clientAddressUDP, clientAddressLength);
 }
 
-void processUDPMessage(std::string message) 
+void sendUDPMessageToAll(std::string message, int excludedIndex = -1) 
 {
-	//std::cout << "Got UDP message: " + message << std::endl;
+	for (int index = 0; index < clientUDPSockets.size(); index++) {
+		if (excludedIndex != index) {
+			sendUDPMessage(message, clientUDPSockets[index], sizeof(clientUDPSockets[index]));
+		}
+	}
+}
+
+void processUDPMessage(std::string message, int clientIndex)
+{
+	std::cout << "Got UDP message: " + message << std::endl;
+
+	sendUDPMessageToAll(message, clientIndex);
 }
 
 void udpReciever() {
@@ -266,12 +291,22 @@ void udpReciever() {
 
 		std::string finalMessage = message;
 
-		processUDPMessage(finalMessage);
 		if(finalMessage == "ping") {
 			sendUDPMessage("pong", clientAddress, clientAddressLength);
 		}
-		else {
-			sendUDPMessage("awhdhakwhdkhakwhkhawtgfauwyrgyagfkeasfgwuagefkaywetgfyuagwyfkgayuwkgfkeajfgbjakgefd", clientAddress, clientAddressLength);
+		else{
+			std::vector<std::string> peices = splitString(finalMessage, '~');
+
+			//add udp socket if it doesnt exist
+			int clientID = std::stoi(peices[0]);
+			int clientIndex = findIndex(clientIDs, clientID);
+			//std::cout << clientUDPSockets.size() << std::endl;
+			if (clientUDPSockets.size() <= clientIndex) {
+				clientUDPSockets.push_back(clientAddress);
+				std::cout << "Added UDP port for client " << clientID << std::endl;
+			}
+
+			processUDPMessage(finalMessage, clientIndex);
 		}
 	}
 }
