@@ -105,7 +105,7 @@ std::string subCharArray(char arr[], int start, int length)
 void sendTCPMessage(SOCKET clientSocket, std::string message)
 {
 	std::cout << "Sent TCP message: " << message << std::endl;
-	//message += "|";
+	message += "|";
 	int len = message.length();
 	send(clientSocket, message.c_str(), len, 0);
 }
