@@ -90,11 +90,22 @@ void addTCPMessageToAll(std::string message)
 	}
 }
 
+std::string subCharArray(char arr[], int start, int length)
+{
+	std::string final = "";
+	// Pick starting point
+	for (int i = start; i < start + length; i++)
+	{
+		final += arr[i];
+	}
+	return final;
+}
+
 //tcp ------------
 void sendTCPMessage(SOCKET clientSocket, std::string message)
 {
 	std::cout << "Sent TCP message: " << message << std::endl;
-	message += "|";
+	//message += "|";
 	int len = message.length();
 	send(clientSocket, message.c_str(), len, 0);
 }
@@ -134,10 +145,12 @@ void handleTCPClient(SOCKET clientSocket) {
 			return;
 		}
 		else {
-			std::cout << "(" << bytesRead << ") Got TCP message: " << message << std::endl;
+			//have to cut message because of tcp things
+			std::string cutMessage = subCharArray(message, 0, bytesRead);
+			std::cout << "(" << bytesRead << ") Got TCP message: " << cutMessage << std::endl;
 
 			//loop through messsages (they get mashed)
-			std::vector<std::string> messages = splitString(message, '|');
+			std::vector<std::string> messages = splitString(cutMessage, '|');
 			for(std::string finalMessage : messages) {
 				if (finalMessage == "ping") {
 					sendTCPMessage(clientSocket, "pong");
