@@ -12,7 +12,7 @@
 constexpr int TCP_PORT = 4242;
 constexpr int UDP_PORT = 6969;
 
-std::vector<std::string> clientTransforms{};
+//std::vector<std::string> clientTransforms{};
 
 int currentClientID = 0;
 
@@ -28,7 +28,6 @@ bool serverOnline = true; //set to false to close all tcp streams
 std::vector<int> clientIDs{};
 std::vector<std::string> clientIPs{};
 std::vector<sockaddr_in> clientUDPSockets{};
-//std::vector<int> clientTCPPorts{};
 
 std::vector<std::string> tcpMessagesToSend{};
 
