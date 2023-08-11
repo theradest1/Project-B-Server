@@ -64,6 +64,7 @@ void removeClientData(int clientID)
 		clientIDs.erase(clientIDs.begin() + index);
 		tcpMessagesToSend.erase(tcpMessagesToSend.begin() + index);
 		clientUDPSockets.erase(clientUDPSockets.begin() + index);
+		std::cout << "Removed UDP Port for client " << clientID << std::endl;
 	}
 	catch (const std::exception&)
 	{
@@ -270,7 +271,7 @@ void sendUDPMessageToAll(std::string message, int excludedIndex = -1)
 
 void processUDPMessage(std::string message, int clientIndex)
 {
-	std::cout << "Got UDP message: " + message << std::endl;
+	//std::cout << "Got UDP message: " + message << std::endl;
 
 	sendUDPMessageToAll(message, clientIndex);
 }
