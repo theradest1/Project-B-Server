@@ -1,4 +1,3 @@
-//this server is for universal multiplayer, but I am hopefully going to be using it in other things too
 #include <iostream>
 #include <winsock2.h>
 #include <string>
@@ -6,8 +5,6 @@
 #include <Ws2tcpip.h>
 #include <thread>
 #include <fstream>
-#include <windows.h>
-//#include <unistd.h> //for linux
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -15,8 +12,6 @@ constexpr int TCP_PORT = 4242;
 constexpr int UDP_PORT = 6969;
 
 const int autoDisconnectSeconds = 3;
-
-//std::vector<std::string> clientTransforms{};
 
 int currentClientID = 0;
 
@@ -33,6 +28,7 @@ std::vector<int> clientIDs{};
 std::vector<int> clientDisconnectTimers{};
 std::vector<std::string> clientIPs{};
 std::vector<sockaddr_in> clientUDPSockets{};
+std::vector<SOCKET> clientTCPSockets{};
 std::vector<std::string> tcpMessagesToSend{};
 
 //utill ----------
@@ -53,11 +49,12 @@ int getClientIndex(int clientID)
 	}
 	return clientIndex;
 }
-void addClientData(int clientID)
+void addClientData(int clientID, SOCKET clientSocket)
 {
 	clientIDs.push_back(clientID);
 	tcpMessagesToSend.push_back("");
 	clientDisconnectTimers.push_back(0);
+	clientTCPSockets.push_back(clientSocket);
 	//udp socket added on first udp message
 }
 void addTCPMessageToAll(std::string message)
@@ -81,6 +78,7 @@ void removeClientData(int clientID)
 		tcpMessagesToSend.erase(tcpMessagesToSend.begin() + index);
 		clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
 		clientUDPSockets.erase(clientUDPSockets.begin() + index);
+		clientTCPSockets.erase(clientTCPSockets.begin() + index);
 		std::cout << "Removed UDP Port for client " << clientID << std::endl;
 
 		addTCPMessageToAll("removeClient~" + std::to_string(clientID));
@@ -129,13 +127,34 @@ void sendTCPMessage(SOCKET clientSocket, std::string message)
 	int len = message.length();
 	send(clientSocket, message.c_str(), len, 0);
 }
+
+void sendTCPMessage(int clientID, std::string message) {
+	int clientIndex = getClientIndex(clientID);
+	SOCKET clientSocket = clientTCPSockets[clientIndex];
+
+	sendTCPMessage(clientSocket, message);
+}
+
+void processTCPMessage(std::string message, int clientID) 
+{
+	if (message == "ping") {
+		sendTCPMessage(clientID, "pong");
+	}
+	else if (message == "quit") {
+		removeClientData(clientID);
+	}
+	else {
+		addTCPMessageToAll(message);
+	}
+}
+
 void handleTCPClient(SOCKET clientSocket) {
 	std::cout << "Opened tcp socket" << std::endl;
 
 	//get socket ID
 	int clientID = currentClientID;
 	currentClientID++;
-	addClientData(clientID);
+	addClientData(clientID, clientSocket);
 	addTCPMessage(clientID, "clientInfo~" + std::to_string(clientID));
 
 	//set non-blocking
@@ -171,16 +190,7 @@ void handleTCPClient(SOCKET clientSocket) {
 			//loop through messsages (they get mashed)
 			std::vector<std::string> messages = splitString(cutMessage, '|');
 			for(std::string finalMessage : messages) {
-				if (finalMessage == "ping") {
-					sendTCPMessage(clientSocket, "pong");
-				}
-				else if (finalMessage == "quit") {
-					removeClientData(clientID);
-				}
-				else {
-					//std::cout << "Got TCP message: " << finalMessage << std::endl;
-					addTCPMessageToAll(finalMessage);
-				}
+				processTCPMessage(finalMessage, clientID);
 			}
 		}
 
