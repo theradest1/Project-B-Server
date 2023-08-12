@@ -29,7 +29,6 @@ std::vector<int> clientDisconnectTimers{};
 std::vector<std::string> clientIPs{};
 std::vector<sockaddr_in> clientUDPSockets{};
 std::vector<SOCKET> clientTCPSockets{};
-std::vector<std::string> tcpMessagesToSend{};
 
 //utill ----------
 int findIndex(std::vector<int> v, int element) {
@@ -52,41 +51,9 @@ int getClientIndex(int clientID)
 void addClientData(int clientID, SOCKET clientSocket)
 {
 	clientIDs.push_back(clientID);
-	tcpMessagesToSend.push_back("");
 	clientDisconnectTimers.push_back(0);
 	clientTCPSockets.push_back(clientSocket);
 	//udp socket added on first udp message
-}
-void addTCPMessageToAll(std::string message)
-{
-	//std::cout << "Added event: " << message << std::endl;
-	for (int index = 0; index < tcpMessagesToSend.size(); index++) {
-		tcpMessagesToSend[index] += message + "|";
-	}
-}
-void addTCPMessage(int clientID, std::string message)
-{
-	tcpMessagesToSend[getClientIndex(clientID)] += message + "|";
-}
-void removeClientData(int clientID)
-{
-	int index = getClientIndex(clientID);
-
-	try
-	{
-		clientIDs.erase(clientIDs.begin() + index);
-		tcpMessagesToSend.erase(tcpMessagesToSend.begin() + index);
-		clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
-		clientUDPSockets.erase(clientUDPSockets.begin() + index);
-		clientTCPSockets.erase(clientTCPSockets.begin() + index);
-		std::cout << "Removed UDP Port for client " << clientID << std::endl;
-
-		addTCPMessageToAll("removeClient~" + std::to_string(clientID));
-	}
-	catch (const std::exception&)
-	{
-		std::cout << "Tried to remove client " << clientID << " data, but it doesnt exist" << std::endl;
-	}
 }
 std::vector<std::string> splitString(const std::string& input, char delimiter) {
 	std::vector<std::string> result;
@@ -120,21 +87,44 @@ std::string subCharArray(char arr[], int start, int length)
 }
 
 //tcp ------------
+
 void sendTCPMessage(SOCKET clientSocket, std::string message)
 {
-	//std::cout << "Sent TCP message: " << message << std::endl;
 	message += "|";
 	int len = message.length();
 	send(clientSocket, message.c_str(), len, 0);
 }
-
 void sendTCPMessage(int clientID, std::string message) {
 	int clientIndex = getClientIndex(clientID);
-	SOCKET clientSocket = clientTCPSockets[clientIndex];
 
+	SOCKET clientSocket = clientTCPSockets[clientIndex];
 	sendTCPMessage(clientSocket, message);
 }
+void sendTCPMessageToAll(std::string message)
+{
+	for (int clientIndex = 0; clientIndex < clientTCPSockets.size(); clientIndex++) {
+		sendTCPMessage(clientTCPSockets[clientIndex], message + "|");
+	}
+}
+void removeClientData(int clientID)
+{
+	int index = getClientIndex(clientID);
 
+	try
+	{
+		clientIDs.erase(clientIDs.begin() + index);
+		clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
+		clientUDPSockets.erase(clientUDPSockets.begin() + index);
+		clientTCPSockets.erase(clientTCPSockets.begin() + index);
+		std::cout << "Removed UDP Port for client " << clientID << std::endl;
+
+		sendTCPMessageToAll("removeClient~" + std::to_string(clientID));
+	}
+	catch (const std::exception&)
+	{
+		std::cout << "Tried to remove client " << clientID << " data, but it doesnt exist" << std::endl;
+	}
+}
 void processTCPMessage(std::string message, int clientID) 
 {
 	if (message == "ping") {
@@ -144,10 +134,9 @@ void processTCPMessage(std::string message, int clientID)
 		removeClientData(clientID);
 	}
 	else {
-		addTCPMessageToAll(message);
+		sendTCPMessageToAll(message);
 	}
 }
-
 void handleTCPClient(SOCKET clientSocket) {
 	std::cout << "Opened tcp socket" << std::endl;
 
@@ -155,18 +144,14 @@ void handleTCPClient(SOCKET clientSocket) {
 	int clientID = currentClientID;
 	currentClientID++;
 	addClientData(clientID, clientSocket);
-	addTCPMessage(clientID, "clientInfo~" + std::to_string(clientID));
-
-	//set non-blocking
-	u_long mode = 1;
-	ioctlsocket(clientSocket, FIONBIO, &mode);
+	sendTCPMessage(clientID, "clientInfo~" + std::to_string(clientID));
 
 	//read vars
 	char message[BUFFER_LEN] = {};
 	int bytesRead;
 
 	while (serverOnline) {
-		//read from stream
+		//read from stream (blocking)
 		bytesRead = recv(clientSocket, message, sizeof(message), 0);
 
 		if (bytesRead == SOCKET_ERROR) {
@@ -185,7 +170,6 @@ void handleTCPClient(SOCKET clientSocket) {
 		else {
 			//have to cut message because of tcp stream echoes
 			std::string cutMessage = subCharArray(message, 0, bytesRead);
-			//std::cout << "(" << bytesRead << ") Got TCP message: " << cutMessage << std::endl;
 
 			//loop through messsages (they get mashed)
 			std::vector<std::string> messages = splitString(cutMessage, '|');
@@ -199,13 +183,6 @@ void handleTCPClient(SOCKET clientSocket) {
 			std::cout << "Closing TCP stream since there is no active ID" << std::endl;
 			closesocket(clientSocket);
 			return;
-		}
-
-		//write to stream
-		if (tcpMessagesToSend[clientIndex] != "")
-		{
-			sendTCPMessage(clientSocket, tcpMessagesToSend[clientIndex]);
-			tcpMessagesToSend[clientIndex] = "";
 		}
 	}
 
@@ -367,7 +344,6 @@ void checkDisconnectTimers() {
 			std::vector<int> idsToDisconnect = {};
 			for (int index = 0; index < clientDisconnectTimers.size(); index++) {
 				clientDisconnectTimers[index]++;
-				std::cout << "Client " << clientIDs[index] << " disconnect timer: " << clientDisconnectTimers[index] << std::endl;
 				if (clientDisconnectTimers[index] >= autoDisconnectSeconds) {
 					idsToDisconnect.push_back(clientIDs[index]);
 				}
