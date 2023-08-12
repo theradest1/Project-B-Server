@@ -1,101 +1,41 @@
-#include <iostream>
-#include <cstring>
+//this server is for universal multiplayer, but I am hopefully going to be using it in other things too
 #include <iostream>
 #include <winsock2.h>
-#include <list>
-#include <vector>
-#include <functional>
-#include <map>
 #include <string>
-#include <sstream>
-#include <ctime>
-#include <future>
-#include <chrono>
+#include <vector>
+#include <Ws2tcpip.h>
+#include <thread>
+#include <fstream>
+#include <windows.h>
+//#include <unistd.h> //for linux
 
 #pragma comment(lib, "ws2_32.lib")
-#pragma warning(disable:4996) 
 
-#define SERVER_PORT 6969
-#define BUFFER_LEN 1024
+constexpr int TCP_PORT = 4242;
+constexpr int UDP_PORT = 6969;
 
-int currentID = 0;
-int currentUMessageID = 0;
-const int maxMessageID = 100;
+const int autoDisconnectSeconds = 3;
 
-const int eventTPS = 1;
-const int transformTPS = 1;
-const int checksBeforeDisconnect = 30;
-const int serverVersion = -1;
+//std::vector<std::string> clientTransforms{};
 
-std::vector<std::string> playerTransformInfo{};
-std::vector<std::string> playerInfo{};
-std::vector<int> currentPlayerIDs{};
-std::vector<int> playerDisconnectTimers{};
-std::vector<std::string> eventsToSend{};
-std::vector<int> uMessageIDs{};
+int currentClientID = 0;
 
-SOCKET server_socket;
-WSADATA wsa;
-sockaddr_in server;
+SOCKET serverSocketUDP, serverSocketTCP;
+sockaddr_in serverAddressUDP, serverAddressTCP;
 
-std::map<std::string, std::function<void(std::string, sockaddr_in)>> functionMap; //a map of all functions available to the clients
+std::vector<sockaddr_in> clients{};
 
-//UTILL -------------------------------
-std::vector<std::string> splitString(const std::string& input, char delimiter) {
-	std::vector<std::string> result;
-	size_t start = 0;
-	size_t end = input.find(delimiter);
+const int BUFFER_LEN = 2048; //max message length
 
-	while (end != std::string::npos) {
-		result.push_back(input.substr(start, end - start));
-		start = end + 1;
-		end = input.find(delimiter, start);
-	}
+bool serverOnline = true; //set to false to close all tcp streams
 
-	result.push_back(input.substr(start));
+std::vector<int> clientIDs{};
+std::vector<int> clientDisconnectTimers{};
+std::vector<std::string> clientIPs{};
+std::vector<sockaddr_in> clientUDPSockets{};
+std::vector<std::string> tcpMessagesToSend{};
 
-	return result;
-}
-
-void logAllInfo() 
-{
-	std::cerr << "-----------\nTotal Players: " << std::to_string(currentPlayerIDs.size()) << "\nPlayer Info:\n" << std::endl;
-	std::cout << "-----------\nTotal Players: " << std::to_string(currentPlayerIDs.size()) << "\nPlayer Info:\n" << std::endl;
-	for (unsigned int i = 0; i < currentPlayerIDs.size(); i++)
-	{
-		std::cerr << "Player " << i << " with ID " << currentPlayerIDs[i] << ": " << std::endl;
-		std::cout << "Player " << i << " with ID " << currentPlayerIDs[i] << ": " << std::endl;
-		std::cerr << "Transform: " << playerTransformInfo[i] << std::endl;
-		std::cout << "Transform: " << playerTransformInfo[i] << std::endl;
-		std::cerr << "Events: " << eventsToSend[i] << "\n" << std::endl;
-		std::cout << "Events: " << eventsToSend[i] << "\n" << std::endl;
-	}
-	std::cerr << "----------------------" << std::endl;
-	std::cout << "----------------------" << std::endl;
-}
-
-void sendMessage(std::string message, sockaddr_in client)
-{
-	std::cout << "Sent message: " << message << std::endl;
-	if (sendto(server_socket, message.c_str(), strlen(message.c_str()), 0, (sockaddr*)&client, sizeof(sockaddr_in)) == SOCKET_ERROR)
-	{
-		printf("sendto() failed with error code: %d", WSAGetLastError());
-	}
-}
-
-std::string getCurrentDateTimeAsString() {
-	// Get the current time
-	std::time_t now = std::time(nullptr);
-
-	// Convert the current time to a string
-	std::string dateTime = std::ctime(&now);
-
-	// Remove the newline character at the end
-	dateTime.erase(dateTime.length() - 1);
-
-	return dateTime;
-}
-
+//utill ----------
 int findIndex(std::vector<int> v, int element) {
 	auto it = std::find(v.begin(), v.end(), element);
 	if (it != v.end()) {
@@ -105,230 +45,356 @@ int findIndex(std::vector<int> v, int element) {
 		return -1;
 	}
 }
-
-int getPlayerIndex(int playerID) {
-	return findIndex(currentPlayerIDs, playerID);
-}
-
-void addEventToAll(std::string message)
+int getClientIndex(int clientID) 
 {
-	std::cout << "Added event: " << message << std::endl;
-	for (int i = 0; i < eventsToSend.size(); i++) {
-		eventsToSend[i] += message + "|";
-		std::cout << eventsToSend[i] << std::endl;
+	int clientIndex = findIndex(clientIDs, clientID);
+	if (clientIndex == -1) {
+		std::cout << "Could not find client index: " << clientID << std::endl;
+	}
+	return clientIndex;
+}
+void addClientData(int clientID)
+{
+	clientIDs.push_back(clientID);
+	tcpMessagesToSend.push_back("");
+	clientDisconnectTimers.push_back(0);
+	//udp socket added on first udp message
+}
+void addTCPMessageToAll(std::string message)
+{
+	//std::cout << "Added event: " << message << std::endl;
+	for (int index = 0; index < tcpMessagesToSend.size(); index++) {
+		tcpMessagesToSend[index] += message + "|";
 	}
 }
-
-void disconnectClient(int playerIndex)
+void addTCPMessage(int clientID, std::string message)
 {
-	addEventToAll("removeClient~" + currentPlayerIDs[playerIndex] + '|');
-	currentPlayerIDs.erase(currentPlayerIDs.begin() + playerIndex);
-	playerDisconnectTimers.erase(playerDisconnectTimers.begin() + playerIndex);
-	playerTransformInfo.erase(playerTransformInfo.begin() + playerIndex);
-	playerInfo.erase(playerInfo.begin() + playerIndex);
-	eventsToSend.erase(eventsToSend.begin() + playerIndex);
-	uMessageIDs.erase(uMessageIDs.begin() + playerIndex);
+	tcpMessagesToSend[getClientIndex(clientID)] += message + "|";
 }
-
-//Client options -------------------------------
-void updateTransform(std::string message, sockaddr_in client)
+void removeClientData(int clientID)
 {
-	std::vector<std::string>splitInfo = splitString(message, '~');
-	std::string transformsToSend = "";
-	for (unsigned int playerIndex = 0; playerIndex < currentPlayerIDs.size(); playerIndex++) {
-		if (currentPlayerIDs[playerIndex] != std::stoi(splitInfo[1])) {
-			transformsToSend += "u~" + currentPlayerIDs[playerIndex] + '~' + playerTransformInfo[playerIndex] + "|";
+	int index = getClientIndex(clientID);
+
+	try
+	{
+		clientIDs.erase(clientIDs.begin() + index);
+		tcpMessagesToSend.erase(tcpMessagesToSend.begin() + index);
+		clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
+		clientUDPSockets.erase(clientUDPSockets.begin() + index);
+		std::cout << "Removed UDP Port for client " << clientID << std::endl;
+
+		addTCPMessageToAll("removeClient~" + std::to_string(clientID));
+	}
+	catch (const std::exception&)
+	{
+		std::cout << "Tried to remove client " << clientID << " data, but it doesnt exist" << std::endl;
+	}
+}
+std::vector<std::string> splitString(const std::string& input, char delimiter) {
+	std::vector<std::string> result;
+	std::string current;
+
+	for (char c : input) {
+		if (c == delimiter) {
+			result.push_back(current);
+			current.clear();
+		}
+		else {
+			current += c;
 		}
 	}
-	int playerIndex = findIndex(currentPlayerIDs, std::stoi(splitInfo[1]));
-	if (playerIndex != -1) {
-		uMessageIDs[playerIndex] += 1;
-		if (uMessageIDs[playerIndex] >= maxMessageID) {
-			uMessageIDs[playerIndex] = 0;
-		}
-		sendMessage(transformsToSend + std::to_string(uMessageIDs[playerIndex]), client);
-		playerTransformInfo[playerIndex] = splitInfo[2] + "~" + splitInfo[3];
-		playerDisconnectTimers[playerIndex] = 0;
+
+	if (!current.empty()) {
+		result.push_back(current);
 	}
-	else {
-		std::cout << "Player wth ID " << splitInfo[1] << " tried to update transform, but are not in game." << std::endl;
+
+	return result;
+}
+std::string subCharArray(char arr[], int start, int length)
+{
+	std::string final = "";
+	// Pick starting point
+	for (int i = start; i < start + length; i++)
+	{
+		final += arr[i];
 	}
+	return final;
 }
 
-void updateEvent(std::string message, sockaddr_in client)
+//tcp ------------
+void sendTCPMessage(SOCKET clientSocket, std::string message)
 {
-	std::vector<std::string>splitInfo = splitString(message, '~');
-	int playerIndex = findIndex(currentPlayerIDs, std::stoi(splitInfo[1]));
-	if (playerIndex != -1) {
-		sendMessage(eventsToSend[playerIndex], client);
-		eventsToSend[playerIndex] = "";
-		playerDisconnectTimers[playerIndex] = 0;
-	}
-	else {
-		std::cout << "Player wth ID " << splitInfo[1] << " tried to update events, but are not in game." << std::endl;
-	}
+	//std::cout << "Sent TCP message: " << message << std::endl;
+	message += "|";
+	int len = message.length();
+	send(clientSocket, message.c_str(), len, 0);
 }
-void newEvent(std::string message, sockaddr_in client)
-{
-	std::vector<std::string> splitInfo = splitString(message, '~');
-	std::string newEvent = message.substr(splitInfo[0].length() + 1, message.length());
-	addEventToAll(newEvent);
-}
-void newClient(std::string message, sockaddr_in client)
-{
-	sendMessage(std::to_string(currentID) + "~" + std::to_string(transformTPS) + "~" + std::to_string(eventTPS) + "~" + std::to_string(maxMessageID), client);
-	std::vector<std::string> splitInfo = splitString(message, '~');
-	addEventToAll("newClient~" + std::to_string(currentID) + '~' + splitInfo[1]);
+void handleTCPClient(SOCKET clientSocket) {
+	std::cout << "Opened tcp socket" << std::endl;
 
-	//debug it
-	std::cout << "---------------------\nDate/Time: " << getCurrentDateTimeAsString() << "\nNew client: ID = " << currentID << ", Username: " << splitInfo[1] << "\n---------------------" << std::endl;
+	//get socket ID
+	int clientID = currentClientID;
+	currentClientID++;
+	addClientData(clientID);
+	addTCPMessage(clientID, "clientInfo~" + std::to_string(clientID));
 
-	std::string allPlayerJoinInfo = "";
-	for (unsigned int playerIndex = 0; playerIndex < currentPlayerIDs.size(); playerIndex++) {
-		allPlayerJoinInfo += "newClient~" + currentPlayerIDs[playerIndex] + '~' + playerInfo[playerIndex] + " | ";
-	}
-	eventsToSend.push_back(allPlayerJoinInfo);
-	playerInfo.push_back(splitInfo[1]);
-	playerTransformInfo.push_back("(0, 0, 0)~(0, 0, 0, 1)");
-	playerDisconnectTimers.push_back(0);
-	currentPlayerIDs.push_back(currentID);
-	uMessageIDs.push_back(0);
+	//set non-blocking
+	u_long mode = 1;
+	ioctlsocket(clientSocket, FIONBIO, &mode);
 
-	currentID++;
-}
-void leave(std::string message, sockaddr_in client)
-{
-	int playerID = std::stoi(splitString(message, '~')[0]);
-	int playerIndex = getPlayerIndex(playerID);
-	disconnectClient(playerIndex);
-	std::cout << "Player with ID " << playerID << " has left the game" << std::endl;
-}
-void ping(std::string message, sockaddr_in client)
-{
-	sendMessage(std::to_string(serverVersion), client);
-}
+	//read vars
+	char message[BUFFER_LEN] = {};
+	int bytesRead;
 
-//Server Functions -------------------------------
-void checkDisconnectTimers()
-{
-	std::thread([=]()
-		{
-			while (true) {
-				std::vector<int> playerIndexesToDisconnect{};
-				for (int playerListID = 0; playerListID < playerDisconnectTimers.size(); playerListID++) {
-					playerDisconnectTimers[playerListID]++;
-					if (playerDisconnectTimers[playerListID] > checksBeforeDisconnect) {
-						playerIndexesToDisconnect.push_back(playerListID);
-					}
-				}
+	while (serverOnline) {
+		//read from stream
+		bytesRead = recv(clientSocket, message, sizeof(message), 0);
 
-				//disconnect all of the players that timed out
-				if (playerIndexesToDisconnect.size() >= 1) {
-					for (int playerIndexID = 0; playerIndexID < playerIndexesToDisconnect.size(); playerIndexID++) {
-						std::cout << "Player with ID " << currentPlayerIDs[playerIndexesToDisconnect[playerIndexID]] << " has timed out." << std::endl;
-						disconnectClient(playerIndexesToDisconnect[playerIndexesToDisconnect.size() - 1 - playerIndexID]);
-					}
-				}
-
-				logAllInfo();
-
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		if (bytesRead == SOCKET_ERROR) {
+			int error = WSAGetLastError();
+			if (error != WSAEWOULDBLOCK) {
+				std::cerr << "Error in recv: " << error << std::endl;
+				break;
 			}
-		}).detach();
+		}
+		else if (bytesRead == 0) {
+			std::cout << "Stream " << clientID << " closed by the client" << std::endl;
+			closesocket(clientSocket);
+			removeClientData(clientID);
+			return;
+		}
+		else {
+			//have to cut message because of tcp stream echoes
+			std::string cutMessage = subCharArray(message, 0, bytesRead);
+			//std::cout << "(" << bytesRead << ") Got TCP message: " << cutMessage << std::endl;
+
+			//loop through messsages (they get mashed)
+			std::vector<std::string> messages = splitString(cutMessage, '|');
+			for(std::string finalMessage : messages) {
+				if (finalMessage == "ping") {
+					sendTCPMessage(clientSocket, "pong");
+				}
+				else if (finalMessage == "quit") {
+					removeClientData(clientID);
+				}
+				else {
+					//std::cout << "Got TCP message: " << finalMessage << std::endl;
+					addTCPMessageToAll(finalMessage);
+				}
+			}
+		}
+
+		int clientIndex = getClientIndex(clientID);
+		if (clientIndex == -1) {
+			std::cout << "Closing TCP stream since there is no active ID" << std::endl;
+			closesocket(clientSocket);
+			return;
+		}
+
+		//write to stream
+		if (tcpMessagesToSend[clientIndex] != "")
+		{
+			sendTCPMessage(clientSocket, tcpMessagesToSend[clientIndex]);
+			tcpMessagesToSend[clientIndex] = "";
+		}
+	}
+
+	//close stream
+	std::cout << "Stream " << clientID << " closed by the server" << std::endl;
+	removeClientData(clientID);
+	closesocket(clientSocket);
 }
-void initializeServer()
-{
-	system("title UDP Server");
+void createTCPServer() {
+	WSADATA wsaData;
 
-	// initialise winsock
-	printf("Starting Server.\nInitialising Winsock...\n");
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-	{
-		printf("Failed. Error Code: %d", WSAGetLastError());
-		exit(0);
+	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (result != 0) {
+		std::cerr << "WSAStartup failed with error: " << result << std::endl;
+		return;
 	}
-	printf("Initialised.\nCreating Socket...\n");
 
-	// create a socket
-	if ((server_socket = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET)
-	{
-		printf("Could not create socket: %d", WSAGetLastError());
+	serverSocketTCP = socket(AF_INET, SOCK_STREAM, 0);
+	if (serverSocketTCP == INVALID_SOCKET) {
+		std::cerr << "Error creating TCP socket: " << WSAGetLastError() << std::endl;
+		WSACleanup();
+		return;
 	}
-	printf("Socket created.\nSetting Bind Info...\n");
 
-	// prepare the sockaddr_in structure
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(SERVER_PORT);
-	printf("Info Setting Done.\nBinding...\n");
+	serverAddressTCP.sin_family = AF_INET;
+	serverAddressTCP.sin_addr.s_addr = INADDR_ANY;
+	serverAddressTCP.sin_port = htons(TCP_PORT);
 
-	// bind
-	if (bind(server_socket, (sockaddr*)&server, sizeof(server)) == SOCKET_ERROR)
-	{
-		printf("Bind failed with error code: %d", WSAGetLastError());
-		exit(EXIT_FAILURE);
+	if (bind(serverSocketTCP, (struct sockaddr*)&serverAddressTCP, sizeof(serverAddressTCP)) == SOCKET_ERROR) {
+		std::cerr << "Error binding TCP socket: " << WSAGetLastError() << std::endl;
+		closesocket(serverSocketTCP);
+		WSACleanup();
+		return;
 	}
-	printf("Bind done.\nServer Setup Done\n\nServer Port: %d\nServer Version: %d\n", SERVER_PORT, serverVersion);
+
+	if (listen(serverSocketTCP, 5) == SOCKET_ERROR) {
+		std::cerr << "Error listening on TCP socket: " << WSAGetLastError() << std::endl;
+		closesocket(serverSocketTCP);
+		WSACleanup();
+		return;
+	}
+
+	std::cout << "TCP Server listening on port " + std::to_string(TCP_PORT) + "\n" << std::endl;
+
+	//checking for new clients
+	sockaddr_in clientAddress;
+	int clientAddressLength = sizeof(clientAddress);
+	SOCKET clientSocket;
+
+	while (true) {
+		clientSocket = accept(serverSocketTCP, (struct sockaddr*)&clientAddress, &clientAddressLength);
+		if (clientSocket == INVALID_SOCKET) {
+			std::cerr << "Error accepting TCP connection: " << WSAGetLastError() << std::endl;
+			continue;
+		}
+
+		//open a new thread for a client
+		std::thread clientThread(handleTCPClient, clientSocket);
+		clientThread.detach();
+	}
+
+	closesocket(serverSocketTCP);
+	WSACleanup();
 }
-void processMessage(std::string message, sockaddr_in client)
+
+//udp ----------
+void sendUDPMessage(std::string message, sockaddr_in clientAddressUDP, int clientAddressLength)
 {
-	std::cout << "Got message: " << message << std::endl;
-	std::string functionName = splitString(message, '~')[0];
-	if (functionMap.find(functionName) != functionMap.end()) {
-		functionMap[functionName](message, client);
-	}
-	else {
-		std::cout << "Command with name " << functionName << " does not exist." << std::endl;
+	sendto(serverSocketUDP, message.c_str(), strlen(message.c_str()), 0, (sockaddr*)&clientAddressUDP, clientAddressLength);
+}
+void sendUDPMessageToAll(std::string message, int excludedIndex = -1) 
+{
+	for (int index = 0; index < clientUDPSockets.size(); index++) {
+		if (excludedIndex != index) {
+			sendUDPMessage(message, clientUDPSockets[index], sizeof(clientUDPSockets[index]));
+		}
 	}
 }
-void bindFunctions()
+void processUDPMessage(std::string message, int clientIndex)
 {
-	functionMap["tu"] = [](std::string message, sockaddr_in client) { updateTransform(message, client); };
-	functionMap["eu"] = [](std::string message, sockaddr_in client) { updateEvent(message, client); };
-	functionMap["e"] = [](std::string message, sockaddr_in client) { newEvent(message, client); };
-	functionMap["newClient"] = [](std::string message, sockaddr_in client) { newClient(message, client); };
-	functionMap["leave"] = [](std::string message, sockaddr_in client) { leave(message, client); };
-	functionMap["ping"] = [](std::string message, sockaddr_in client) { ping(message, client); };
+	//std::cout << "Got UDP message: " + message << std::endl;
+
+	sendUDPMessageToAll(message, clientIndex);
 }
-int main()
-{
-	//make the program output to logs instead of terminal
-	bool outputFile = std::freopen("output.txt", "w", stdout);
+void udpReciever() {
+	sockaddr_in clientAddress;
+	int clientAddressLength = sizeof(clientAddress);
 
-	if (!outputFile) {
-		return 0;
-	}
-
-	bindFunctions();
-	initializeServer();
-	//std::async(std::launch::async, checkDisconnectTimers);
-	checkDisconnectTimers();
-
-	while (true)
-	{
-		fflush(stdout);
+	while (true) {
 		char message[BUFFER_LEN] = {};
 
-		// try to receive some data, this is a blocking call
-		int message_len;
-		int slen = sizeof(sockaddr_in);
-		sockaddr_in client;
-		if (message_len = recvfrom(server_socket, message, BUFFER_LEN, 0, (sockaddr*)&client, &slen) == SOCKET_ERROR)
-		{
-			printf("recvfrom() failed with error code: %d", WSAGetLastError());
-			exit(0);
-		}
+		int bytesRead = recvfrom(serverSocketUDP, message, BUFFER_LEN, 0, (sockaddr*)&clientAddress, &clientAddressLength);
+		if (bytesRead < 0) {
+			std::cerr << "Error receiving UDP data: " << WSAGetLastError() << std::endl;
+			continue;
+		};
 
-		//process message
-		//std::thread([=]() {
-		processMessage(message, client);
-		//	}).detach();
+		std::string finalMessage = message;
+
+		if(finalMessage == "ping") {
+			sendUDPMessage("pong", clientAddress, clientAddressLength);
+		}
+		else{
+			std::vector<std::string> peices = splitString(finalMessage, '~');
+
+			//add udp socket if it doesnt exist
+			int clientID = std::stoi(peices[0]);
+			int clientIndex = findIndex(clientIDs, clientID);
+			//std::cout << clientUDPSockets.size() << std::endl;
+			if (clientUDPSockets.size() <= clientIndex) {
+				clientUDPSockets.push_back(clientAddress);
+				std::cout << "Added UDP port for client " << clientID << std::endl;
+			}
+
+			clientDisconnectTimers[clientIndex] = 0;
+			processUDPMessage(finalMessage, clientIndex);
+		}
+	}
+}
+void createUDPServer() {
+	WSADATA wsaData;
+	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (result != 0) {
+		std::cerr << "WSAStartup failed with error: " << result << std::endl;
+		return;
 	}
 
-	printf("Closing Server...\n");
-	closesocket(server_socket);
-	printf("Done.\nCleaning Up...\n");
+	serverSocketUDP= socket(AF_INET, SOCK_DGRAM, 0);
+	if (serverSocketUDP == INVALID_SOCKET) {
+		std::cerr << "Error creating UDP socket: " << WSAGetLastError() << std::endl;
+		WSACleanup();
+		return;
+	}
+
+	serverAddressUDP.sin_family = AF_INET;
+	serverAddressUDP.sin_addr.s_addr = INADDR_ANY;
+	serverAddressUDP.sin_port = htons(UDP_PORT);
+
+	if (bind(serverSocketUDP, (sockaddr*)&serverAddressUDP, sizeof(serverAddressUDP)) == SOCKET_ERROR) {
+		std::cerr << "Error binding UDP socket: " << WSAGetLastError() << std::endl;
+		closesocket(serverSocketUDP);
+		WSACleanup();
+		return;
+	}
+
+	std::cout << "UDP Server listening on port " + std::to_string(UDP_PORT) + "\n" << std::endl;
+
+	udpReciever();
+
+	closesocket(serverSocketUDP);
 	WSACleanup();
-	printf("Done, goodbye (:");
+}
+
+// other 
+void checkDisconnectTimers() {
+	std::thread([=]()
+	{
+		while (true) {
+			std::vector<int> idsToDisconnect = {};
+			for (int index = 0; index < clientDisconnectTimers.size(); index++) {
+				clientDisconnectTimers[index]++;
+				std::cout << "Client " << clientIDs[index] << " disconnect timer: " << clientDisconnectTimers[index] << std::endl;
+				if (clientDisconnectTimers[index] >= autoDisconnectSeconds) {
+					idsToDisconnect.push_back(clientIDs[index]);
+				}
+			}
+
+			for (int index = 0; index < idsToDisconnect.size(); index++)
+			{
+				int id = idsToDisconnect[index];
+				std::cout << "Auto disconnected client " << id << std::endl;
+				removeClientData(id);
+			}
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		}
+	}).detach();
+}
+
+int main() {
+	//set console output to file
+	/*std::ofstream out("output.txt");
+	std::streambuf* coutbuf = std::cout.rdbuf();
+	std::cout.rdbuf(out.rdbuf());*/
+
+	// Run both TCP and UDP servers concurrently
+	if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)createTCPServer, NULL, 0, NULL) == NULL) {
+		std::cerr << "Error creating TCP server thread" << std::endl;
+		return 1;
+	}
+
+	if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)createUDPServer, NULL, 0, NULL) == NULL) {
+		std::cerr << "Error creating UDP server thread" << std::endl;
+		return 1;
+	}
+	
+	checkDisconnectTimers();
+
+	//wait for servers to finish (which will never happen as they run in infinite loops)
+	WaitForSingleObject(GetCurrentThread(), INFINITE);
 	return 0;
 }
