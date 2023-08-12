@@ -6,11 +6,15 @@
 #include <Ws2tcpip.h>
 #include <thread>
 #include <fstream>
+#include <windows.h>
+//#include <unistd.h> //for linux
 
 #pragma comment(lib, "ws2_32.lib")
 
 constexpr int TCP_PORT = 4242;
 constexpr int UDP_PORT = 6969;
+
+const int autoDisconnectSeconds = 3;
 
 //std::vector<std::string> clientTransforms{};
 
@@ -26,6 +30,7 @@ const int BUFFER_LEN = 2048; //max message length
 bool serverOnline = true; //set to false to close all tcp streams
 
 std::vector<int> clientIDs{};
+std::vector<int> clientDisconnectTimers{};
 std::vector<std::string> clientIPs{};
 std::vector<sockaddr_in> clientUDPSockets{};
 
@@ -53,6 +58,7 @@ void addClientData(int clientID)
 {
 	clientIDs.push_back(clientID);
 	tcpMessagesToSend.push_back("");
+	clientDisconnectTimers.push_back(0);
 	//udp socket added on first udp message
 }
 void removeClientData(int clientID)
@@ -63,6 +69,7 @@ void removeClientData(int clientID)
 	{
 		clientIDs.erase(clientIDs.begin() + index);
 		tcpMessagesToSend.erase(tcpMessagesToSend.begin() + index);
+		clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
 		clientUDPSockets.erase(clientUDPSockets.begin() + index);
 		std::cout << "Removed UDP Port for client " << clientID << std::endl;
 	}
@@ -98,12 +105,10 @@ void addTCPMessageToAll(std::string message)
 		tcpMessagesToSend[index] += message + "|";
 	}
 }
-
 void addTCPMessage(int clientID, std::string message)
 {
 	tcpMessagesToSend[getClientIndex(clientID)] += message + "|";
 }
-
 std::string subCharArray(char arr[], int start, int length)
 {
 	std::string final = "";
@@ -123,7 +128,6 @@ void sendTCPMessage(SOCKET clientSocket, std::string message)
 	int len = message.length();
 	send(clientSocket, message.c_str(), len, 0);
 }
-
 void handleTCPClient(SOCKET clientSocket) {
 	std::cout << "Opened tcp socket" << std::endl;
 
@@ -196,7 +200,6 @@ void handleTCPClient(SOCKET clientSocket) {
 	removeClientData(clientID);
 	closesocket(clientSocket);
 }
-
 void createTCPServer() {
 	WSADATA wsaData;
 
@@ -259,7 +262,6 @@ void sendUDPMessage(std::string message, sockaddr_in clientAddressUDP, int clien
 {
 	sendto(serverSocketUDP, message.c_str(), strlen(message.c_str()), 0, (sockaddr*)&clientAddressUDP, clientAddressLength);
 }
-
 void sendUDPMessageToAll(std::string message, int excludedIndex = -1) 
 {
 	for (int index = 0; index < clientUDPSockets.size(); index++) {
@@ -268,14 +270,12 @@ void sendUDPMessageToAll(std::string message, int excludedIndex = -1)
 		}
 	}
 }
-
 void processUDPMessage(std::string message, int clientIndex)
 {
 	//std::cout << "Got UDP message: " + message << std::endl;
 
 	sendUDPMessageToAll(message, clientIndex);
 }
-
 void udpReciever() {
 	sockaddr_in clientAddress;
 	int clientAddressLength = sizeof(clientAddress);
@@ -306,11 +306,11 @@ void udpReciever() {
 				std::cout << "Added UDP port for client " << clientID << std::endl;
 			}
 
+			clientDisconnectTimers[clientIndex] = 0;
 			processUDPMessage(finalMessage, clientIndex);
 		}
 	}
 }
-
 void createUDPServer() {
 	WSADATA wsaData;
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -345,6 +345,31 @@ void createUDPServer() {
 	WSACleanup();
 }
 
+// other 
+void checkDisconnectTimers() {
+	std::thread([=]()
+	{
+		while (true) {
+			std::vector<int> idsToDisconnect = {};
+			for (int index = 0; index < clientDisconnectTimers.size(); index++) {
+				clientDisconnectTimers[index]++;
+				std::cout << "Client " << clientIDs[index] << " disconnect timer: " << clientDisconnectTimers[index] << std::endl;
+				if (clientDisconnectTimers[index] >= autoDisconnectSeconds) {
+					idsToDisconnect.push_back(clientIDs[index]);
+				}
+			}
+
+			for (int index = 0; index < idsToDisconnect.size(); index++)
+			{
+				int id = idsToDisconnect[index];
+				std::cout << "Auto disconnected client " << id << std::endl;
+				removeClientData(id);
+			}
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		}
+	}).detach();
+}
 
 int main() {
 	//set console output to file
@@ -362,8 +387,10 @@ int main() {
 		std::cerr << "Error creating UDP server thread" << std::endl;
 		return 1;
 	}
+	
+	checkDisconnectTimers();
 
-	// Wait for servers to finish (which will never happen as they run in infinite loops)
+	//wait for servers to finish (which will never happen as they run in infinite loops)
 	WaitForSingleObject(GetCurrentThread(), INFINITE);
 	return 0;
 }
