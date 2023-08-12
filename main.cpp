@@ -33,7 +33,6 @@ std::vector<int> clientIDs{};
 std::vector<int> clientDisconnectTimers{};
 std::vector<std::string> clientIPs{};
 std::vector<sockaddr_in> clientUDPSockets{};
-
 std::vector<std::string> tcpMessagesToSend{};
 
 //utill ----------
@@ -61,6 +60,17 @@ void addClientData(int clientID)
 	clientDisconnectTimers.push_back(0);
 	//udp socket added on first udp message
 }
+void addTCPMessageToAll(std::string message)
+{
+	//std::cout << "Added event: " << message << std::endl;
+	for (int index = 0; index < tcpMessagesToSend.size(); index++) {
+		tcpMessagesToSend[index] += message + "|";
+	}
+}
+void addTCPMessage(int clientID, std::string message)
+{
+	tcpMessagesToSend[getClientIndex(clientID)] += message + "|";
+}
 void removeClientData(int clientID)
 {
 	int index = getClientIndex(clientID);
@@ -72,6 +82,8 @@ void removeClientData(int clientID)
 		clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
 		clientUDPSockets.erase(clientUDPSockets.begin() + index);
 		std::cout << "Removed UDP Port for client " << clientID << std::endl;
+
+		addTCPMessageToAll("removeClient~" + std::to_string(clientID));
 	}
 	catch (const std::exception&)
 	{
@@ -97,17 +109,6 @@ std::vector<std::string> splitString(const std::string& input, char delimiter) {
 	}
 
 	return result;
-}
-void addTCPMessageToAll(std::string message) 
-{
-	//std::cout << "Added event: " << message << std::endl;
-	for (int index = 0; index < tcpMessagesToSend.size(); index++) {
-		tcpMessagesToSend[index] += message + "|";
-	}
-}
-void addTCPMessage(int clientID, std::string message)
-{
-	tcpMessagesToSend[getClientIndex(clientID)] += message + "|";
 }
 std::string subCharArray(char arr[], int start, int length)
 {
@@ -172,6 +173,9 @@ void handleTCPClient(SOCKET clientSocket) {
 			for(std::string finalMessage : messages) {
 				if (finalMessage == "ping") {
 					sendTCPMessage(clientSocket, "pong");
+				}
+				else if (finalMessage == "quit") {
+					removeClientData(clientID);
 				}
 				else {
 					//std::cout << "Got TCP message: " << finalMessage << std::endl;
