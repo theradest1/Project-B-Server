@@ -31,6 +31,15 @@ std::vector<sockaddr_in> clientUDPSockets{};
 std::vector<SOCKET> clientTCPSockets{};
 
 //utill ----------
+std::string condenseStringVector(std::vector<std::string> stringVector, std::string devider = " ", int startIndex = 0) {
+	std::string finalString = "";
+	for (int index = startIndex; index < stringVector.size(); index++) {
+		finalString += stringVector[index];
+		if (index != stringVector.size() - 1) {
+			finalString += devider;
+		}
+	}
+}
 int findIndex(std::vector<int> v, int element) {
 	auto it = std::find(v.begin(), v.end(), element);
 	if (it != v.end()) {
@@ -106,6 +115,14 @@ void sendTCPMessageToAll(std::string message)
 		sendTCPMessage(clientTCPSockets[clientIndex], message + "|");
 	}
 }
+void sendTCPMessageToAll(std::string message, int excludedID)
+{
+	for (int clientIndex = 0; clientIndex < clientTCPSockets.size(); clientIndex++) {
+		if (clientIDs[clientIndex] != excludedID) {
+			sendTCPMessage(clientTCPSockets[clientIndex], message + "|");
+		}
+	}
+}
 void removeClientData(int clientID)
 {
 	int index = getClientIndex(clientID);
@@ -127,14 +144,45 @@ void removeClientData(int clientID)
 }
 void processTCPMessage(std::string message, int clientID) 
 {
-	if (message == "ping") {
-		sendTCPMessage(clientID, "pong");
+	//message format:
+	//messageType~info1~info2~info3
+	std::vector<std::string> messageParts = splitString(message, '~');
+	std::string messageType = messageParts[0];
+
+	//message types: (short for bandwidth)
+	//g - global event (echoes event to all clients) - g~info1~info2
+	//o - excluding event (echoes event to everyone but sender) - o~info1~info2
+	//d - direct event (echoes event to one client) - d~clientID~info1~info2
+	//s - server event (has the server process the event) - s~info1~info2
+
+	//c++ doesn't allow switch statements for strings, so here is a if block ):
+	if (messageType == "g") {
+		std::string messageToSend = condenseStringVector(messageParts, "~", 1);
+		sendTCPMessageToAll(messageToSend);
 	}
-	else if (message == "quit") {
-		removeClientData(clientID);
+	else if (messageType == "o") { 
+		std::string messageToSend = condenseStringVector(messageParts, "~", 1);
+		sendTCPMessageToAll(message, clientID);
+	}
+	else if (messageType == "d") {
+		int recvClient = std::stoi(messageParts[1]);
+		std::string messageToSend = condenseStringVector(messageParts, "~", 2);
+		sendTCPMessage(recvClient, messageToSend);
+	}
+	else if (messageType == "s") {
+		std::string serverEvent = messageParts[1];
+		if (serverEvent == "ping") {
+			sendTCPMessage(clientID, "pong");
+		}
+		else if (message == "quit") {
+			removeClientData(clientID);
+		}
+		else {
+			std::cout << "Unknown server event from client " << clientID << ": " << serverEvent << std::endl;
+		}
 	}
 	else {
-		sendTCPMessageToAll(message);
+		std::cout << "Unknown message type from client " << clientID << ": " << messageType << std::endl;
 	}
 }
 void handleTCPClient(SOCKET clientSocket) {
