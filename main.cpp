@@ -114,6 +114,10 @@ void sendTCPMessage(SOCKET clientSocket, std::string message)
 void sendTCPMessage(int clientID, std::string message) {
 	int clientIndex = getClientIndex(clientID);
 
+	if (clientIndex == -1) {
+		return;
+	}
+
 	SOCKET clientSocket = clientTCPSockets[clientIndex];
 	sendTCPMessage(clientSocket, message);
 }
