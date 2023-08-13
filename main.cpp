@@ -135,20 +135,19 @@ void removeClientData(int clientID)
 {
 	int index = getClientIndex(clientID);
 
-	try
-	{
-		clientIDs.erase(clientIDs.begin() + index);
-		clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
-		clientUDPSockets.erase(clientUDPSockets.begin() + index);
-		clientTCPSockets.erase(clientTCPSockets.begin() + index);
-		std::cout << "Removed UDP Port for client " << clientID << std::endl;
-
-		sendTCPMessageToAll("removeClient~" + std::to_string(clientID));
-	}
-	catch (...)
-	{
+	
+	if (index == -1) {
 		std::cout << "Tried to remove client " << clientID << " data, but it doesnt exist" << std::endl;
+		return;
 	}
+
+	clientIDs.erase(clientIDs.begin() + index);
+	clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
+	clientUDPSockets.erase(clientUDPSockets.begin() + index);
+	clientTCPSockets.erase(clientTCPSockets.begin() + index);
+	std::cout << "Removed UDP Port for client " << clientID << std::endl;
+
+	sendTCPMessageToAll("removeClient~" + std::to_string(clientID));
 }
 void processTCPMessage(std::string message, int clientID) 
 {
