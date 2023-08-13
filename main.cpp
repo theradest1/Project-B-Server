@@ -163,7 +163,7 @@ void processTCPMessage(std::string message, int clientID)
 	}
 	else if (messageType == "o") { 
 		std::string messageToSend = condenseStringVector(messageParts, "~", 1);
-		sendTCPMessageToAll(message, clientID);
+		sendTCPMessageToAll(messageToSend, clientID);
 	}
 	else if (messageType == "d") {
 		int recvClient = std::stoi(messageParts[1]);
