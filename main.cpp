@@ -31,6 +31,11 @@ std::vector<sockaddr_in> clientUDPSockets{};
 std::vector<SOCKET> clientTCPSockets{};
 
 //utill ----------
+void debug(std::string message) {
+	std::cout << message << std::endl;
+	std::cerr << message << std::endl;
+}
+
 void resetClientDisconnectTimer(int clientIndex) {
 	if (clientIndex == -1) {
 		return;
@@ -61,7 +66,7 @@ int getClientIndex(int clientID)
 {
 	int clientIndex = findIndex(clientIDs, clientID);
 	if (clientIndex == -1) {
-		std::cout << "Could not find client index: " << clientID << std::endl;
+		debug("Could not find client index: " + std::to_string(clientID));
 	}
 	return clientIndex;
 }
@@ -141,7 +146,6 @@ void removeClientData(int clientID)
 
 	
 	if (index == -1) {
-		std::cout << "Tried to remove client " << clientID << " data, but it doesnt exist" << std::endl;
 		return;
 	}
 
@@ -149,7 +153,6 @@ void removeClientData(int clientID)
 	clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
 	clientUDPSockets.erase(clientUDPSockets.begin() + index);
 	clientTCPSockets.erase(clientTCPSockets.begin() + index);
-	std::cout << "Removed UDP Port for client " << clientID << std::endl;
 
 	sendTCPMessageToAll("removeClient~" + std::to_string(clientID));
 }
@@ -189,15 +192,15 @@ void processTCPMessage(std::string message, int clientID)
 			removeClientData(clientID);
 		}
 		else {
-			std::cout << "Unknown server event from client " << clientID << ": " << serverEvent << std::endl;
+			debug("Unknown server event from client " + std::to_string(clientID) + ": " + serverEvent);
 		}
 	}
 	else {
-		std::cout << "Unknown message type from client " << clientID << ": " << messageType << std::endl;
+		debug("Unknown message type from client " + std::to_string(clientID) + ": " + messageType);
 	}
 }
 void handleTCPClient(SOCKET clientSocket) {
-	std::cout << "Opened tcp socket" << std::endl;
+	debug("Opened tcp socket");
 
 	//get socket ID
 	int clientID = currentClientID;
@@ -221,7 +224,7 @@ void handleTCPClient(SOCKET clientSocket) {
 			}
 		}
 		else if (bytesRead == 0) {
-			std::cout << "Stream " << clientID << " closed by the client" << std::endl;
+			debug("Stream " + std::to_string(clientID) + " closed by the client");
 			closesocket(clientSocket);
 			removeClientData(clientID);
 			return;
@@ -239,14 +242,14 @@ void handleTCPClient(SOCKET clientSocket) {
 
 		int clientIndex = getClientIndex(clientID);
 		if (clientIndex == -1) {
-			std::cout << "Closing TCP stream since there is no active ID" << std::endl;
+			debug("Closing TCP stream since there is no active ID");
 			closesocket(clientSocket);
 			return;
 		}
 	}
 
 	//close stream
-	std::cout << "Stream " << clientID << " closed by the server" << std::endl;
+	debug("Stream " + std::to_string(clientID) + " closed by the server");
 	removeClientData(clientID);
 	closesocket(clientSocket);
 }
@@ -284,7 +287,7 @@ void createTCPServer() {
 		return;
 	}
 
-	std::cout << "TCP Server listening on port " + std::to_string(TCP_PORT) + "\n" << std::endl;
+	debug("TCP Server listening on port " + std::to_string(TCP_PORT));
 
 	//checking for new clients
 	sockaddr_in clientAddress;
@@ -294,7 +297,7 @@ void createTCPServer() {
 	while (true) {
 		clientSocket = accept(serverSocketTCP, (struct sockaddr*)&clientAddress, &clientAddressLength);
 		if (clientSocket == INVALID_SOCKET) {
-			std::cerr << "Error accepting TCP connection: " << WSAGetLastError() << std::endl;
+			debug("Error accepting TCP connection: " + std::to_string(WSAGetLastError()));
 			continue;
 		}
 
@@ -322,8 +325,6 @@ void sendUDPMessageToAll(std::string message, int excludedIndex = -1)
 }
 void processUDPMessage(std::string message, int clientIndex)
 {
-	//std::cout << "Got UDP message: " + message << std::endl;
-
 	sendUDPMessageToAll(message, clientIndex);
 }
 void udpReciever() {
@@ -350,10 +351,9 @@ void udpReciever() {
 			//add udp socket if it doesnt exist
 			int clientID = std::stoi(peices[0]);
 			int clientIndex = findIndex(clientIDs, clientID);
-			//std::cout << clientUDPSockets.size() << std::endl;
-			if (clientUDPSockets.size() <= clientIndex) {
+			if (clientUDPSockets.size() <= clientIndex && clientIndex != -1) {
 				clientUDPSockets.push_back(clientAddress);
-				std::cout << "Added UDP port for client " << clientID << std::endl;
+				debug("Added UDP port for client " + std::to_string(clientID));
 			}
 
 			resetClientDisconnectTimer(clientIndex);
@@ -387,7 +387,7 @@ void createUDPServer() {
 		return;
 	}
 
-	std::cout << "UDP Server listening on port " + std::to_string(UDP_PORT) + "\n" << std::endl;
+	debug("UDP Server listening on port " + std::to_string(UDP_PORT));
 
 	udpReciever();
 
@@ -411,7 +411,7 @@ void checkDisconnectTimers() {
 			for (int index = 0; index < idsToDisconnect.size(); index++)
 			{
 				int id = idsToDisconnect[index];
-				std::cout << "Auto disconnected client " << id << std::endl;
+				debug("Auto disconnected client " + std::to_string(id));
 				removeClientData(id);
 			}
 
@@ -422,9 +422,9 @@ void checkDisconnectTimers() {
 
 int main() {
 	//set console output to file
-	/*std::ofstream out("output.txt");
+	std::ofstream out("output.txt");
 	std::streambuf* coutbuf = std::cout.rdbuf();
-	std::cout.rdbuf(out.rdbuf());*/
+	std::cout.rdbuf(out.rdbuf());
 
 	// Run both TCP and UDP servers concurrently
 	if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)createTCPServer, NULL, 0, NULL) == NULL) {
