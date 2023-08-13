@@ -39,6 +39,7 @@ std::string condenseStringVector(std::vector<std::string> stringVector, std::str
 			finalString += devider;
 		}
 	}
+	return finalString;
 }
 int findIndex(std::vector<int> v, int element) {
 	auto it = std::find(v.begin(), v.end(), element);
@@ -192,7 +193,7 @@ void handleTCPClient(SOCKET clientSocket) {
 	int clientID = currentClientID;
 	currentClientID++;
 	addClientData(clientID, clientSocket);
-	sendTCPMessage(clientID, "clientInfo~" + std::to_string(clientID));
+	sendTCPMessage(clientID, "setClientInfo~" + std::to_string(clientID));
 
 	//read vars
 	char message[BUFFER_LEN] = {};
