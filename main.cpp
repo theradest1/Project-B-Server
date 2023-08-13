@@ -31,6 +31,13 @@ std::vector<sockaddr_in> clientUDPSockets{};
 std::vector<SOCKET> clientTCPSockets{};
 
 //utill ----------
+void resetClientDisconnectTimer(int clientIndex) {
+	if (clientIndex == -1) {
+		return;
+	}
+	clientDisconnectTimers[clientIndex] = 0;
+}
+
 std::string condenseStringVector(std::vector<std::string> stringVector, std::string devider = " ", int startIndex = 0) {
 	std::string finalString = "";
 	for (int index = startIndex; index < stringVector.size(); index++) {
@@ -138,7 +145,7 @@ void removeClientData(int clientID)
 
 		sendTCPMessageToAll("removeClient~" + std::to_string(clientID));
 	}
-	catch (const std::exception&)
+	catch (...)
 	{
 		std::cout << "Tried to remove client " << clientID << " data, but it doesnt exist" << std::endl;
 	}
@@ -346,7 +353,7 @@ void udpReciever() {
 				std::cout << "Added UDP port for client " << clientID << std::endl;
 			}
 
-			clientDisconnectTimers[clientIndex] = 0;
+			resetClientDisconnectTimer(clientIndex);
 			processUDPMessage(finalMessage, clientIndex);
 		}
 	}
