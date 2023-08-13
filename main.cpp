@@ -13,6 +13,8 @@ constexpr int UDP_PORT = 6969;
 
 const int autoDisconnectSeconds = 3;
 
+int lastGivenTeam = 1;
+
 int currentClientID = 0;
 
 SOCKET serverSocketUDP, serverSocketTCP;
@@ -206,7 +208,16 @@ void handleTCPClient(SOCKET clientSocket) {
 	int clientID = currentClientID;
 	currentClientID++;
 	addClientData(clientID, clientSocket);
-	sendTCPMessage(clientID, "setClientInfo~" + std::to_string(clientID));
+
+	if (lastGivenTeam == 1) {
+		lastGivenTeam = 0;
+	}
+	else {
+		lastGivenTeam = 1;
+	}
+
+	debug("Gave team: " + std::to_string(lastGivenTeam));
+	sendTCPMessage(clientID, "setClientInfo~" + std::to_string(clientID) + "~" + std::to_string(lastGivenTeam));
 
 	//read vars
 	char message[BUFFER_LEN] = {};
