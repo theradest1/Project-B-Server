@@ -209,15 +209,7 @@ void handleTCPClient(SOCKET clientSocket) {
 	currentClientID++;
 	addClientData(clientID, clientSocket);
 
-	if (lastGivenTeam == 1) {
-		lastGivenTeam = 0;
-	}
-	else {
-		lastGivenTeam = 1;
-	}
-
-	debug("Gave team: " + std::to_string(lastGivenTeam));
-	sendTCPMessage(clientID, "setClientInfo~" + std::to_string(clientID) + "~" + std::to_string(lastGivenTeam));
+	sendTCPMessage(clientID, "setClientInfo~" + std::to_string(clientID));
 
 	//read vars
 	char message[BUFFER_LEN] = {};
