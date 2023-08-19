@@ -30,6 +30,7 @@ std::vector<int> clientIDs{};
 std::vector<int> clientDisconnectTimers{};
 std::vector<std::string> clientIPs{};
 std::vector<sockaddr_in> clientUDPSockets{};
+std::vector<bool> assignedUDPSocket{};
 std::vector<SOCKET> clientTCPSockets{};
 
 //utill ----------
@@ -77,7 +78,9 @@ void addClientData(int clientID, SOCKET clientSocket)
 	clientIDs.push_back(clientID);
 	clientDisconnectTimers.push_back(0);
 	clientTCPSockets.push_back(clientSocket);
-	//udp socket added on first udp message
+	sockaddr_in blankSocket;
+	clientUDPSockets.push_back(blankSocket);
+	assignedUDPSocket.push_back(false);
 }
 std::vector<std::string> splitString(const std::string& input, char delimiter) {
 	std::vector<std::string> result;
@@ -146,7 +149,6 @@ void removeClientData(int clientID)
 {
 	int index = getClientIndex(clientID);
 
-	
 	if (index == -1) {
 		return;
 	}
@@ -155,6 +157,7 @@ void removeClientData(int clientID)
 	clientDisconnectTimers.erase(clientDisconnectTimers.begin() + index);
 	clientUDPSockets.erase(clientUDPSockets.begin() + index);
 	clientTCPSockets.erase(clientTCPSockets.begin() + index);
+	assignedUDPSocket.erase(assignedUDPSocket.begin() + index);
 
 	sendTCPMessageToAll("removeClient~" + std::to_string(clientID));
 }
@@ -321,7 +324,7 @@ void sendUDPMessage(std::string message, sockaddr_in clientAddressUDP, int clien
 void sendUDPMessageToAll(std::string message, int excludedIndex = -1) 
 {
 	for (int index = 0; index < clientUDPSockets.size(); index++) {
-		if (excludedIndex != index) {
+		if (excludedIndex != index && assignedUDPSocket[index]) {
 			sendUDPMessage(message, clientUDPSockets[index], sizeof(clientUDPSockets[index]));
 		}
 	}
@@ -354,9 +357,10 @@ void udpReciever() {
 			//add udp socket if it doesnt exist
 			int clientID = std::stoi(peices[0]);
 			int clientIndex = findIndex(clientIDs, clientID);
-			if (clientUDPSockets.size() <= clientIndex && clientIndex != -1) {
-				clientUDPSockets.push_back(clientAddress);
-				debug("Added UDP port for client " + std::to_string(clientID));
+
+			if (clientIndex != -1 && !assignedUDPSocket[clientIndex]) {
+				assignedUDPSocket[clientIndex] = true;
+				clientUDPSockets[clientIndex] = clientAddress;
 			}
 
 			resetClientDisconnectTimer(clientIndex);
