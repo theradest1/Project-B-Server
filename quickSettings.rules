@@ -17,7 +17,7 @@ float dash cooldown
 
 weapons:
 float headshot mult
-float damage
+int damage
 float max dist
 float firerate
 float bullet speed (visual)

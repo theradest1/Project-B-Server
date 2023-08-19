@@ -32,6 +32,7 @@ std::vector<std::string> clientIPs{};
 std::vector<sockaddr_in> clientUDPSockets{};
 std::vector<bool> assignedUDPSocket{};
 std::vector<SOCKET> clientTCPSockets{};
+std::string settings = "";
 
 //utill ----------
 void debug(std::string message) {
@@ -213,6 +214,7 @@ void handleTCPClient(SOCKET clientSocket) {
 	addClientData(clientID, clientSocket);
 
 	sendTCPMessage(clientID, "setClientInfo~" + std::to_string(clientID));
+	sendTCPMessage(clientID, "quickSettings~" + settings);
 
 	//read vars
 	char message[BUFFER_LEN] = {};
@@ -427,6 +429,41 @@ void checkDisconnectTimers() {
 	}).detach();
 }
 
+void checkQuickSettings() {
+
+	std::thread([=]()
+	{
+		std::string commentString = "//";
+
+		while (true) {
+			//open file
+			std::ifstream inputFile("quickSettings.txt");
+			if (!inputFile.is_open()) {
+				std::cerr << "Error opening file, breaking quick update" << std::endl;
+			}
+			
+			//read lines
+			std::string finalSettings = "";
+			std::string line;
+			while (std::getline(inputFile, line)) {
+				if (line.substr(0, 2) != commentString) {
+					finalSettings += line;
+				}
+			}
+			inputFile.close();
+
+			if (finalSettings != settings) {
+				settings = finalSettings;
+				debug("New Settings: " + finalSettings);
+				sendTCPMessageToAll("quickSettings~" + finalSettings);
+			}
+
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+		}
+	}).detach();
+}
+
 int main() {
 	//set console output to file
 	std::ofstream out("output.txt");
@@ -445,6 +482,8 @@ int main() {
 	}
 	
 	checkDisconnectTimers();
+	checkQuickSettings();
+
 
 	//wait for servers to finish (which will never happen as they run in infinite loops)
 	WaitForSingleObject(GetCurrentThread(), INFINITE);
