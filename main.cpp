@@ -355,7 +355,7 @@ void udpReciever() {
 			sendUDPMessage("pong", clientAddress, clientAddressLength);
 		}
 		else if (finalMessage == "Iping") { //A ping, but requesting server info
-			sendUDPMessage("pongI~" + std::to_string(serverVersion) + '~' + std::to_string(clientIDs.size()), clientAddress, clientAddressLength);
+			sendUDPMessage("pong~" + std::to_string(serverVersion) + '~' + std::to_string(clientIDs.size()), clientAddress, clientAddressLength);
 		}
 		else{
 			std::vector<std::string> peices = splitString(finalMessage, '~');
