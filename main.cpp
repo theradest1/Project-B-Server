@@ -8,6 +8,7 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
+const int serverVersion = 8;
 constexpr int TCP_PORT = 4242;
 constexpr int UDP_PORT = 6969;
 
@@ -353,20 +354,28 @@ void udpReciever() {
 		if(finalMessage == "ping") {
 			sendUDPMessage("pong", clientAddress, clientAddressLength);
 		}
+		else if (finalMessage == "Iping") { //A ping, but requesting server info
+			sendUDPMessage("pongI~" + std::to_string(serverVersion) + '~' + std::to_string(clientIDs.size()), clientAddress, clientAddressLength);
+		}
 		else{
 			std::vector<std::string> peices = splitString(finalMessage, '~');
 
 			//add udp socket if it doesnt exist
-			int clientID = std::stoi(peices[0]);
-			int clientIndex = findIndex(clientIDs, clientID);
+			try {
+				int clientID = std::stoi(peices[0]);
+				int clientIndex = findIndex(clientIDs, clientID);
 
-			if (clientIndex != -1 && !assignedUDPSocket[clientIndex]) {
-				assignedUDPSocket[clientIndex] = true;
-				clientUDPSockets[clientIndex] = clientAddress;
+				if (clientIndex != -1 && !assignedUDPSocket[clientIndex]) {
+					assignedUDPSocket[clientIndex] = true;
+					clientUDPSockets[clientIndex] = clientAddress;
+				}
+
+				resetClientDisconnectTimer(clientIndex);
+				processUDPMessage(finalMessage, clientIndex);
 			}
-
-			resetClientDisconnectTimer(clientIndex);
-			processUDPMessage(finalMessage, clientIndex);
+			catch(const std::invalid_argument& e){
+				debug("Message from new client doesnt have valid start char: " + finalMessage);
+			}
 		}
 	}
 }
