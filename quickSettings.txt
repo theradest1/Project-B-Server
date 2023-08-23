@@ -1,5 +1,4 @@
-//player
--1;
+player;
 100;
 100;
 5;
@@ -17,6 +16,7 @@ true;
 0.2~
 
 //ak47
+weapon;
 0;
 1.5;
 37;
@@ -28,6 +28,7 @@ true;
 30~
 
 //pistol
+weapon;
 1;
 1.5;
 22;
@@ -39,6 +40,7 @@ true;
 18~
 
 //knife
+weapon;
 2;
 1.5;
 80;
@@ -47,4 +49,40 @@ true;
 0;
 0;
 0;
-0
+0~
+
+//damage
+ability;
+0;
+.1;
+999~
+
+//health
+ability;
+1;
+.1;
+999~
+
+//firerate
+ability;
+2;
+.1;
+999~
+
+//walk speed
+ability;
+3;
+.1;
+999~
+
+//dash
+ability;
+4;
+.1;
+999~
+
+//clip size
+ability;
+5;
+.1;
+999

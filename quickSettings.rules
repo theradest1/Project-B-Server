@@ -1,5 +1,5 @@
-player:
--1
+player ---------------------
+player
 int max health
 float acceleration
 float in-air accel
@@ -16,7 +16,8 @@ float dash speed
 float dash time
 float dash cooldown
 
-weapons:
+weapons -------------------
+weapon
 int weaponID
 float headshot mult
 int damage
@@ -27,5 +28,10 @@ int ammo in reserve
 int max ammo
 int start ammo
 
+abilities -----------------
+ability
+int ability id
+float step
+float max multiplier
 
 
