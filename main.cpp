@@ -478,6 +478,9 @@ int main() {
 	std::ofstream out("output.txt");
 	std::streambuf* coutbuf = std::cout.rdbuf();
 	std::cout.rdbuf(out.rdbuf());
+	
+	debug("Server V" + std::to_string(serverVersion));
+	debug("If you have problems, check for updates on github\n");
 
 	// Run both TCP and UDP servers concurrently
 	if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)createTCPServer, NULL, 0, NULL) == NULL) {
